@@ -1,0 +1,403 @@
+<?php
+class DoController_SN_Menu extends DoController
+{
+   function doAction_getadmlinks ($adata){
+       $arrayRoot= array();
+       
+       $arrayRootAdmLinks= array();
+       $arrayRootSiteLinks= array();
+       $queryAdm  = "SELECT   adm_config.title , adm_config.data_key FROM adm_config WHERE adm_config.data_key <> '' AND adm_config.data_key NOT IN (SELECT     adm_menu.url   FROM adm_menu)";
+       
+       $querySite = "SELECT
+                      site_content.content_title AS title,
+                      site_content.content_address AS address
+                    FROM site_content
+                    UNION 
+                    SELECT
+                      IF(node_title IS NULL or node_title = '', site_contenttype_view.title , node_title) as title,
+                      CONCAT('/', site_contenttype.contenttype_address, '/') AS address
+                    FROM site_contenttype
+                      INNER JOIN site_contenttype_view
+                        ON site_contenttype.contenttype_mashine_name = site_contenttype_view.mashine_name
+                    WHERE site_contenttype_view.is_this_list = 1";
+                    
+        if ($stmt = self::$con->prepare($queryAdm)) {
+            $stmt->execute();
+            $stmt->bind_result($title,$data_key);
+            while ($stmt->fetch()) {
+                 $arrayItemn = array('name'=> $title,
+                                    
+                                    'type'=>'category',
+                                    'url'=> $data_key,
+                                    'editing'=> false,
+                                    'access'=>[],
+                                    'collapsed'=>true,
+                                    'categories'=> []);
+                array_push($arrayRootAdmLinks, $arrayItemn); 
+            }
+            $stmt->close();
+        }
+        
+        if ($stmt = self::$con->prepare($querySite)) {
+            $stmt->execute();
+            $stmt->bind_result($title,$data_key);
+            while ($stmt->fetch()) {
+                 $arrayItemn = array('name'=> $title,
+                                  
+                                    'type'=>'category',
+                                    'url'=> $data_key,
+                                    'editing'=> false,
+                                    'access'=>[],
+                                    'collapsed'=>true,
+                                    'categories'=> []);
+                array_push($arrayRootSiteLinks, $arrayItemn); 
+            }
+            $stmt->close();
+        }
+        
+        $arrayRoot['site']=$arrayRootSiteLinks;
+        $arrayRoot['adm'] =$arrayRootAdmLinks;
+        
+        
+        $result=json_encode($arrayRoot);
+		self::returnData($result);
+       
+   }
+   
+   function  doAction_listroles($adata){
+		$arrayRoot= array();
+		$query = "SELECT
+		auth_roles.role_name,
+		auth_roles.role_id
+		FROM auth_roles
+		LEFT OUTER JOIN auth_user_role
+		ON auth_roles.role_id = auth_user_role.role_id
+		WHERE auth_roles.role_show <> 0
+		GROUP BY auth_roles.role_id";
+		if ($stmt = self::$con->prepare($query)) {
+			$stmt->execute();
+			$stmt->bind_result($role_name, $role_id);
+			while ($stmt->fetch()) {
+				$arrayItem = array('label' => $role_name ,
+					               'value' => $role_id );
+				array_push($arrayRoot, $arrayItem);
+			}
+			$stmt->close();
+		}
+		$result=json_encode($arrayRoot);
+		self::returnData($result);
+	}
+	
+   function doAction_savechanges ($adata){
+      
+       $zone    =$adata['zone'];
+       $menusObj=$adata['groupsObj'];
+       
+       if($zone =='site'){
+            if(!self::$per->hasPermission('saveMenusZoneSite','DoController_SN_Menu')){
+                            self::returnMessage("Access die !!!", 'Danger', 'OPS'); exit();
+            }else{
+               self::saveMenusZone($menusObj,$zone); 
+            }
+       }else if($zone =='adm'){
+            if(!self::$per->hasPermission('saveMenusZoneAdm','DoController_SN_Menu')){
+                            self::returnMessage("Access die !!!", 'Danger', 'OPS'); exit();
+            }else{
+               self::saveMenusZone($menusObj,$zone);
+            }
+       }else{
+           self::returnMessage('И что ты хотел получить ?', 'Warning');
+       }
+        
+   }
+   
+   function saveMenusZone($menusObj,$Zone){
+        $all_query_ok=true;
+       foreach ($menusObj as $key => $menuObj) {
+       
+           $isNew     =$menuObj['isnew'];
+           $isUpdate  =$menuObj['isupdate'];
+           $toRemove  =$menuObj['remove'];
+           $name      =$menuObj['name'];
+           $data_key  =$menuObj['data_key'];
+           $type      =$menuObj['type'];
+           $access    =$menuObj['access'];
+           $categories=$menuObj['categories'];
+           
+           if($Zone=='site'){
+             $table_type='site_typmenu';
+             $table_menu='site_menu';
+           }else if($Zone=='adm'){
+             $table_type='adm_typmenu';
+             $table_menu='adm_menu';
+           }else{
+              self::returnMessage('И что ты хотел получить ?', 'Warning');
+              exit();
+           }
+           
+            if($isNew==true && $toRemove==false){
+                   $data_key=self::genGUI();
+                   $q1="INSERT INTO `$table_type` (`data_key`, `title`,`weight`) VALUES ('$data_key', '$name','$key');";
+            }
+            elseif($isNew==false  && $toRemove==false){
+                   $q1="UPDATE `$table_type` SET `title`='$name', `weight`='$key' WHERE `data_key`='$data_key';";
+                   
+            }elseif($toRemove==true){
+                   $q1="DELETE FROM `$table_type` WHERE `data_key`='$data_key';";
+            }
+        
+            try {
+                  self::$con->autocommit(false);
+                 
+                      self::$con->query($q1);
+                      
+                      if (!self::$con->commit()) {
+                            $all_query_ok=false;
+                            self::returnMessage('ERROR', 'Warning');
+                      }
+                 
+                 
+                  if($all_query_ok==true){
+                     $q2="DELETE FROM `$table_menu` WHERE `data_key`='$data_key';"; 
+                     $qa="DELETE FROM menu_access WHERE `data_key`='$data_key';";
+                      self::$con->query($q2);
+                      self::$con->query($qa);
+                      if (!self::$con->commit()) {
+                            $all_query_ok=false;
+                            self::returnMessage('ERROR', 'Warning');
+                      }else{
+                          if($toRemove==false){
+                              self::$con->autocommit(true); 
+                                 if ($stmt = self::$con->prepare("SELECT MAX(`id`) AS `id` FROM `$table_menu`;"))
+                                 {
+                                    $stmt->execute();
+                                    $stmt->bind_result($max);
+                                    $stmt->fetch();
+                                    $stmt->close();
+                                    if($max==null){$max=1;}else{$max++;}
+                                    $qs="ALTER TABLE $table_menu AUTO_INCREMENT=$max;";
+                                    self::$con->query($qs);
+                                 }
+                                 
+                                 if ($stmt = self::$con->prepare("SELECT MAX(`idma`) AS `idma` FROM menu_access;"))
+                                 {
+                                    $stmt->execute();
+                                    $stmt->bind_result($maxa);
+                                    $stmt->fetch();
+                                    $stmt->close();
+                                    if($maxa==null){$maxa=1;}else{$maxa++;}
+                                    $qsa="ALTER TABLE menu_access AUTO_INCREMENT=$maxa;";
+                                    self::$con->query($qsa);
+                                 } 
+                                self::writeAccessItem($data_key,$data_key,$access); 
+                                self::writeLinks($table_menu,$categories,$data_key,0); 
+                              }
+                      }
+                  }
+                  
+                 
+ 
+            } 
+            catch (Exception $e) {
+    		    self::$con->close();
+    		    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+    		    exit();
+    		}
+       }
+        if($all_query_ok==true){
+                      self::returnMessage('Success! The settings are applied ', 'Success');
+        }
+   }
+   
+   function writeLinks($table_menu,$categories,$data_key,$parent_id){
+       $weight=1;
+       foreach ($categories as $key => $link) {
+           $name            =$link['name'];
+           $url             =$link['url'];
+           $classm          =$link['classm'];
+           $stylem          =$link['stylem'];
+           $access          =$link['access'];
+           $child_categories=$link['categories'];
+           $data_key_item=self::genGUI();
+           
+           $q="INSERT INTO `$table_menu` (`data_key`, `title`, `url`, `weight`, `parent_id`,`classm`,`stylem`,`item_key`) VALUES ('$data_key', '$name', '$url', '$weight', '$parent_id','$classm','$stylem','$data_key_item');";
+           self::$con->query($q);
+          
+           $weight++;
+           if(!empty($child_categories)){
+               $myid = self::$con->insert_id;
+               self::writeLinks($table_menu,$child_categories,$data_key,$myid);
+           }
+            self::writeAccessItem($data_key,$data_key_item,$access);
+       }
+   }
+   
+   function writeAccessItem($data_key,$item_key,$access){
+        foreach ($access as $key => $ia) {
+            $rid=$ia['value'];
+            $q="INSERT INTO `menu_access` (`idr`, `idi`, `data_key`) VALUES ('$rid', '$item_key', '$data_key');";
+            self::$con->query($q);
+        }
+   }
+   
+   
+   function doAction_getadmmenus ($adata){
+        $arrayRoot= array();
+        
+        $arrayRootAdmMenu= array();
+        $arrayRootSiteMenu= array();
+        
+        $queryAdm  = "SELECT   adm_typmenu.title, adm_typmenu.data_key, adm_typmenu.weight FROM adm_typmenu ORDER BY adm_typmenu.weight";
+        $querySite = "SELECT   site_typmenu.title, site_typmenu.data_key, site_typmenu.weight FROM site_typmenu ORDER BY site_typmenu.weight";
+        
+        if ($stmt = self::$con->prepare($queryAdm)) { 
+            $stmt->execute();
+            $stmt->bind_result($title, $data_key, $weight);
+            while ($stmt->fetch()) {
+               	$arrayItem = array( 'name'=> $title,
+                                    
+                                    'type'=>'group',
+                                    'data_key'=> $data_key,
+                                    'editing'=> false,
+                                    'isnew'=>false,
+                                    'isupdate'=>false,
+                                    'remove'=>false,
+                                    'collapsed'=>true,
+                                    'access'=>[],
+                                    'categories'=> []);
+				     array_push($arrayRootAdmMenu, $arrayItem); 
+            }
+            $stmt->close();
+        }
+        
+        if ($stmt = self::$con->prepare($querySite)) {
+            $stmt->execute();
+            $stmt->bind_result($title, $data_key, $weight);
+            while ($stmt->fetch()) {
+               	$arrayItem = array( 'name'=> $title,
+                                   
+                                    'type'=>'group',
+                                    'data_key'=> $data_key,
+                                    'editing'=> false,
+                                    'isnew'=>false,
+                                    'isupdate'=>false,
+                                    'remove'=>false,
+                                    'collapsed'=>true,
+                                    'access'=>[],
+                                    'categories'=> []);
+				     array_push($arrayRootSiteMenu, $arrayItem); 
+            }
+            $stmt->close();
+        }
+        
+        
+        foreach ($arrayRootAdmMenu  as $key => $category) {
+            $arrayRootAdmMenu[$key]['categories']=$this->getCategory($category['data_key'],0,true);
+            $arrayRootAdmMenu[$key]['access']=$this->getAccessItem($category['data_key'],$category['data_key']);
+        }
+        
+        foreach ($arrayRootSiteMenu  as $key => $category) {
+            $arrayRootSiteMenu[$key]['categories']=$this->getCategory($category['data_key'],0,false);
+            $arrayRootSiteMenu[$key]['access']=$this->getAccessItem($category['data_key'],$category['data_key']);
+        }
+        
+        $arrayRoot['site']=$arrayRootSiteMenu;
+        $arrayRoot['adm']=$arrayRootAdmMenu;
+        
+        
+        //$result=json_encode($arrayRoot,JSON_UNESCAPED_UNICODE);
+        $result=self::$json->encode($arrayRoot);
+       // var_dump($arrayRoot);
+		self::returnData($result);
+   } 
+   
+   function getCategory($data_key,$parent_id,$is_adm){
+       $i=0;
+       $arrayRoot= array();
+      
+       if($is_adm==true){
+           $query = "SELECT
+                      adm_menu.title,
+                      adm_menu.url,
+                      adm_menu.weight,
+                      adm_menu.id,
+                      adm_menu.classm,
+                      adm_menu.stylem,
+                      adm_menu.item_key
+                    FROM adm_menu
+                    WHERE adm_menu.data_key = ?
+                    AND adm_menu.parent_id = ?";
+       }else{
+           $query = "SELECT
+                      site_menu.title,
+                      site_menu.url,
+                      site_menu.weight,
+                      site_menu.id,
+                      site_menu.classm,
+                      site_menu.stylem,
+                      site_menu.item_key
+                    FROM site_menu
+                    WHERE site_menu.data_key = ?
+                    AND site_menu.parent_id = ?
+                    ORDER BY site_menu.weight";
+       }
+       
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->bind_param("si", $data_key,$parent_id);
+                $stmt->execute();
+                $stmt->bind_result($titlen, $url, $weight, $id,$classm, $stylem,$ikey);
+                while ($stmt->fetch()) {
+                    $arrayItemn = array('name'=> $titlen,
+                                        'sortOrder'=> $i,
+                                        'type'=>'category',
+                                        'url'=> $url,
+                                        'id'=> $id,
+                                        'classm'=> $classm,
+                                        'stylem'=> $stylem,
+                                        'editing'=> false,
+                                        'isnew'=>false,
+                                        'isupdate'=>false,
+                                        'ikey'=>$ikey,
+                                        'access'=>[],
+                                        'categories'=> []);
+                                        
+                    array_push($arrayRoot, $arrayItemn);
+                    ++$i;
+                }
+                $stmt->close();
+                
+                
+                if (!empty($arrayRoot)){
+                     foreach ($arrayRoot  as $key => $category) {
+                         $arrayRoot[$key]['categories']=$this->getCategory($data_key,$arrayRoot[$key]['id'],$is_adm);
+                         $arrayRoot[$key]['access']    =$this->getAccessItem($data_key,$arrayRoot[$key]['ikey']);
+                     }
+                }
+            }
+       return $arrayRoot;
+   }
+   
+   
+   function getAccessItem($dkey,$ikey){
+       $arrayRoot= array();
+       $q="SELECT
+              auth_roles.role_name AS label,
+              menu_access.idr AS value
+            FROM auth_roles
+              RIGHT OUTER JOIN menu_access
+                ON auth_roles.role_id = menu_access.idr
+            WHERE menu_access.data_key = ? AND menu_access.idi = ?";
+         if ($stmt = self::$con->prepare($q)) {
+             $stmt->bind_param("ss", $dkey,$ikey);
+             $stmt->execute();
+             $stmt->bind_result($label, $value);
+             while ($stmt->fetch()) {
+                 $arrayItemn = array('label'=> $label,'value'=> $value);
+                 array_push($arrayRoot, $arrayItemn);
+             }
+         }
+       return $arrayRoot;
+   }
+
+    
+}?>

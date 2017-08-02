@@ -1,0 +1,81 @@
+[
+    {
+        "name": "XSCMS Site",
+        "type": "site",
+        "version": "1.0 a",
+        "description": "Site theme (default)",
+        "file": "site-template.tpl",
+        "screenshot": "screenshot.png",
+         "blocks":[
+                          {
+                             "name": "Nav bar",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-navbar.tpl"
+                           },
+                           {
+                             "name": "Left SideBar",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-leftsidebar.tpl"
+                           },
+                           {
+                             "name": "Logo",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-logobar.tpl"
+                           },
+                           {
+                             "name": "Body prefix",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-bodyprefix.tpl"
+                           },
+                           {
+                             "name": "Body postfix",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-bodypostfix.tpl"
+                           },
+                           {
+                             "name": "Footer",
+                             "version": "1.0 a",
+                             "description": "Site theme",
+                             "file": "site-block-footerbar.tpl"
+                           }
+
+                        ],
+        "poligons":[
+                           {
+                             "name": "Nav bar",
+                             "mashinename":"topbar_home",
+                             "description":"Nav Bar Home"
+                           },
+                           {
+                             "name": "Left bar",
+                             "mashinename":"leftbar_home",
+                             "description":"Nav Bar Home"
+                           },
+                           {
+                             "name": "Logo",
+                             "mashinename":"logobar_home",
+                             "description":"Logo Bar Home"
+                           },
+                           {
+                             "name": "Body prefix",
+                             "mashinename":"bodyprefix_home",
+                             "description":"Body prefix Home"
+                           },
+                           {
+                             "name": "Body postfix",
+                             "mashinename":"bodypostfix_home",
+                             "description":"Body postfix Home"
+                           },
+                           {
+                             "name": "Footer",
+                             "mashinename":"footerbar_home",
+                             "description":"Footer Home"
+                           }
+                        ]                
+    }
+] 

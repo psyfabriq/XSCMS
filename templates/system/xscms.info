@@ -1,0 +1,20 @@
+[
+    {
+        "name": "XSCMS Authorization",
+        "type": "auth",
+        "version": "1.0 a",
+        "description": "Authorization theme",
+        "file": "auth-template.tpl",
+        "screenshot": "auth-screenshot.png",
+        "code": "5F0368DF-47F0-F187-6F73-586A3BEF31C8"
+    },
+    {
+        "name": "XSCMS 404",
+        "type": "404",
+        "version": "1.0 a",
+        "description": "404 theme (default)",
+        "file": "404-template.tpl",
+        "screenshot": "404-screenshot.png",
+        "code": "E64B8E26-2F40-E1C7-014A-0B79DF5DA80C"
+    }
+]

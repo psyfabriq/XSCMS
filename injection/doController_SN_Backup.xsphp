@@ -1,0 +1,25 @@
+<?php
+	class DoController_SN_Backup extends DoController
+	{
+		function  doAction_testbackup ($adata){
+		
+		$backup = new backup;
+		 
+		$backup->set_etiqueta ("xscms"); //file name
+    	$backup->set_dir_origen ("tests/");
+    	$backup->set_dir_destino ("backup_tmp/");
+    
+    
+       $res=$backup->backup_files();
+    	
+       if($res===false){
+            self::returnMessage('Failed !!! ', 'Warning');
+          
+       }else {
+             self::returnMessage($res, 'Success');
+       }
+    	 
+		}
+		
+	}
+?>

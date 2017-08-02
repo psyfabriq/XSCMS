@@ -1,0 +1,475 @@
+<?php
+	class DoController_SN_AdmConstructor extends DoController
+	{
+	  
+	    
+		function doAction_listconstructions($adata){
+
+			$query = "SELECT data_key AS url,
+			                 title AS title,
+			                 config_type AS systemname
+			          FROM adm_config ORDER BY data_key";
+
+			if ($stmt = self::$con->prepare($query)) {
+
+			    $stmt->execute();
+			    $stmt->bind_result($url, $title, $systemname);
+			    $listconstructions=array();
+
+			    while ($stmt->fetch()) {
+			    	$item= array('address' => "$url" , 'name' => "$title", 'systemname' => "$systemname" );
+			        array_push($listconstructions, $item);
+			    }
+			    $stmt->close();
+			    $listconstructions=json_encode($listconstructions);
+			    self::returnData($listconstructions);
+			}
+		}
+		function doAction_addconstruction($adata){
+		    
+		     $GLOBALS["Debug"]->AddMessage('l'.__LINE__, get_class($this).' on line '.__LINE__ );
+             $GLOBALS["Debug"]->AddMessage('listdata', json_encode($adata));
+             $GLOBALS["Debug"]->End(true);
+             
+             //exit();
+
+            $all_query_ok=true;
+			$update=false;
+			$were_error=' '; 
+			
+			/*
+			if (function_exists('mysql_real_escape_string'))
+            {
+                $systemname      =trim(mysql_real_escape_string (trim('SN_').trim(ucfirst($adata['systemname']))));
+		    	$title           =trim(mysql_real_escape_string (trim($adata['realname'])));
+		    	$address         =trim(mysql_real_escape_string (trim($adata['adress'])));
+
+			    $php_code        =trim(mysql_real_escape_string (trim($adata['php_code_admin'])));
+		    	$tpl_code        =trim(mysql_real_escape_string (trim($adata['tpl_code_admin'])));
+		    	$js_code         =trim(mysql_real_escape_string (trim($adata['js_code_admin'])));
+		    	$sql_code        =trim(mysql_real_escape_string (trim($adata['sql_code_admin'])));
+
+		    	$php_code_client =trim(mysql_real_escape_string (trim($adata['php_code_client'])));
+		    	$tpl_code_client =trim(mysql_real_escape_string (trim($adata['tpl_code_client'])));
+		    	$js_code_client  =trim(mysql_real_escape_string (trim($adata['js_code_client'])));
+
+		    	$tclass          =trim(mysql_real_escape_string (trim($adata['formstyle'])));
+			    $tweight         =trim(mysql_real_escape_string (trim($adata['position'])));
+            } */
+           // elseif (function_exists('mysql_escape_string'))
+           // {
+               	$systemname      =trim(mysql_escape_string (trim('SN_').trim(ucfirst($adata['systemname']))));
+		    	$title           =trim(mysql_escape_string (trim($adata['realname'])));
+		    	$address         =trim(mysql_escape_string (trim($adata['adress'])));
+
+			    $php_code        =trim(mysql_escape_string (trim($adata['php_code_admin'])));
+		    	$tpl_code        =trim(mysql_escape_string (trim($adata['tpl_code_admin'])));
+		    	$js_code         =trim(mysql_escape_string (trim($adata['js_code_admin'])));
+		    	$sql_code        =trim(mysql_escape_string (trim($adata['sql_code_admin'])));
+
+		    	$php_code_client =trim(mysql_escape_string (trim($adata['php_code_client'])));
+		    	$tpl_code_client =trim(mysql_escape_string (trim($adata['tpl_code_client'])));
+		    	$js_code_client  =trim(mysql_escape_string (trim($adata['js_code_client'])));
+
+		    	$tclass          =trim(mysql_escape_string (trim($adata['formstyle'])));
+			    $tweight         =trim(mysql_escape_string (trim($adata['position'])));
+           // }
+			
+			
+			$error_msg       ="";
+			
+			//$db=parent::$mobj['obj']; // Mongo
+			
+			//$m_container    = $db->adm_container;
+
+
+			if (array_key_exists('update', $adata)) {
+			   $update=$adata['update'];
+			}
+			$guid=self::getGUID();
+                    /*
+                    
+                    /////////////////////////////////////////////////////////////////////////////////////////////////////MONGO
+                     $data_container =array(
+                                            'data_key'  => $systemname,
+                                            'address'   => $address , 
+                                            'title'     => $title ,
+                                            'weight'    => $tweight ,
+                                            'obj_js'    => array('value' => $js_code, 'key_container' => $guid ), 
+                                            'obj_php'   => array('value' => $php_code ) , 
+                                            'obj_tpl'   => array('value' => $tpl_code, 'class' => $tclass , 'weight'=>$tweight )
+                                            );
+
+                     if(!empty($m_container->findOne(array('data_key' => $systemname)))){
+                         $newdata = array('$set' => $data_container);
+                         $m_container->update(array('data_key' => $systemname), $newdata);
+                     }
+                     else{
+                         $m_container->batchInsert(array($data_container));
+                     }
+                     
+                     ////////////////////////////////////////////////////////////////////////////////////////////////////END MONGO
+                     
+                     */
+                    $q1="INSERT INTO adm_config (`data_key`, `title`, `config_type`,`weight`) VALUES ('$address','$title','$systemname','$tweight')";
+                    $q2="INSERT INTO php_container (`who_container`, `code_container`) VALUES ('$systemname','$php_code')";
+		        	$q3="INSERT INTO adm_template (`data_key`, `data`, `class`, `weight`) VALUES ('$systemname','$tpl_code','$tclass','$tweight')";
+			        $q4="INSERT INTO js_container (`who_container`, `code_container`, `key_container`) VALUES ('$systemname','$js_code','$guid')";
+			        $q5="INSERT INTO sql_container (`who_container`, `code_container`) VALUES ('$systemname','$sql_code')";
+
+			        $c1=md5($systemname.'php_code'); // not work
+			        $c2=md5($systemname.'js_code'); // not work
+			        $c3=md5($systemname.'tpl_code'); // not work
+
+			        $qc1="INSERT INTO site_client_code (`machine_name`, `type_code`, `code`, `hash`) VALUES ('$systemname','php_code','$php_code_client','$c1')"; // not work
+			        $qc2="INSERT INTO site_client_code (`machine_name`, `type_code`, `code`, `hash`) VALUES ('$systemname','js_code' ,'$js_code_client' ,'$c2')"; // not work
+			        $qc3="INSERT INTO site_client_code (`machine_name`, `type_code`, `code`, `hash`) VALUES ('$systemname','tpl_code','$tpl_code_client','$c3')"; // not work
+
+
+                try {
+				    self::$con->autocommit(FALSE);
+
+				    if($update==true){
+				    	$all_query_ok=$this->doAction_deleteitemconstructions ($adata);
+				    	$error_msg.= $all_query_ok===false ? "<br>DELETE ERROR " : "";
+				    }
+
+				     self::$con->query($q1) ? null : $all_query_ok=false;
+				     $were_error='adm_config';
+				     $error_msg.= $all_query_ok===false ? "<br>CONFIG ERROR " : "";
+
+				    if(!empty($php_code)&&$all_query_ok<>false){
+				    	self::$con->query($q2) ? null : $all_query_ok=false;
+				    	 $were_error='php_container';
+				    	 $error_msg.= $all_query_ok===false ? "<br>PHP CONTAINER ERROR " : "";
+				    }
+				    if(!empty($tpl_code)&&$all_query_ok<>false){
+				    	self::$con->query($q3) ? null : $all_query_ok=false;
+				    	 $were_error='adm_template';
+				    	  $error_msg.= $all_query_ok===false ? "<br>ADM TEMPLATE ERROR " : "";
+				    }
+				    if(!empty($js_code)&&$all_query_ok<>false){
+				    	self::$con->query($q4) ? null : $all_query_ok=false;
+				    	 $were_error='js_container';
+				    	 $error_msg.= $all_query_ok===false ? "<br>JS CONTAINER ERROR " : "";
+				    }
+				     if(!empty($sql_code)&&$all_query_ok<>false){
+				    	self::$con->query($q5) ? null : $all_query_ok=false;
+				    	 $were_error='sql_container';
+				    	 $error_msg.= $all_query_ok===false ? "<br>SQL CONTAINER ERROR " : "";
+				    }
+
+				    /************************Client Code******************************/
+				    if(!empty($php_code_client)&&$all_query_ok<>false){
+				    	self::$con->query($qc1) ? null : $all_query_ok=false;
+				    	 $were_error='php_code_client';
+				    	 $error_msg.= $all_query_ok===false ? "<br>PHP CLIENT ERROR " : "";
+				    }
+
+				    if(!empty($js_code_client)&&$all_query_ok<>false){
+				    	self::$con->query($qc2) ? null : $all_query_ok=false;
+				    	 $were_error='js_code_client';
+				    	 $error_msg.= $all_query_ok===false ? "<br>JS CLIENT ERROR " : "";
+				    }
+
+				    if(!empty($tpl_code_client)&&$all_query_ok<>false){
+				    	self::$con->query($qc3) ? null : $all_query_ok=false;
+				    	 $were_error='tpl_code_client';
+				    	 $error_msg.= $all_query_ok===false ? "<br>TPL CLIENT ERROR " : "";
+				    }
+				    /************************End Client Code******************************/
+
+				    $all_query_ok ? self::$con->commit() : self::$con->rollback();
+
+
+				    if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage($error_msg, 'Warning');
+					    exit();
+					}
+				    self::$con->close();
+				    self::returnMessage('Success! ID of last inserted record  '.$guid, 'Success');
+				} catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+				}
+		}
+		
+		function getGUID(){
+		    if (function_exists('com_create_guid')){
+                      return com_create_guid();
+		    }else{
+		        mt_srand((double)microtime()*10000);//optional for php 4.2.0 and up.
+		        $charid = strtoupper(md5(uniqid(rand(), true)));
+		        $hyphen = chr(45);// "-"
+		        $uuid = substr($charid, 0, 8).$hyphen
+			            .substr($charid, 8, 4).$hyphen
+			            .substr($charid,12, 4).$hyphen
+			            .substr($charid,16, 4).$hyphen
+			            .substr($charid,20,12);
+
+		        return $uuid;
+		    }
+		}
+		function doAction_updateconstruction ($adata){
+			$adata['update']=true;
+			$this->doAction_addconstruction($adata);
+		}
+		function doAction_itemconstructions($adata){
+
+			$query = "SELECT
+                              adm_config.data_key AS url,
+                              adm_config.title AS title,
+                              adm_config.config_type AS systemname,
+                              php_container.code_container AS phpcode,
+                              adm_template.data AS htmlcode,
+                              js_container.code_container AS jscode,
+                              adm_template.class AS class,
+                              adm_template.weight AS weight,
+                              tpl_client.code AS tpl_code_client,
+                              js_client.code AS js_code_client,
+                              php_client.code AS php_code_client
+                            FROM adm_config
+                              LEFT OUTER JOIN php_container
+                                ON adm_config.config_type = php_container.who_container
+                              LEFT OUTER JOIN adm_template
+                                ON adm_config.config_type = adm_template.data_key
+                              LEFT OUTER JOIN js_container
+                                ON adm_config.config_type = js_container.who_container
+                              LEFT OUTER JOIN site_client_code tpl_client
+                                ON adm_config.config_type = tpl_client.machine_name
+                                AND tpl_client.type_code = 'tpl_code'
+                              LEFT OUTER JOIN site_client_code js_client
+                                ON adm_config.config_type = js_client.machine_name
+                                AND js_client.type_code = 'js_code'
+                              LEFT OUTER JOIN site_client_code php_client
+                                ON adm_config.config_type = php_client.machine_name
+                                AND php_client.type_code = 'php_code'
+                               WHERE adm_config.config_type = ?
+                            GROUP BY adm_config.data_key,
+                                     adm_config.title,
+                                     adm_config.config_type,
+                                     php_container.code_container,
+                                     adm_template.data,
+                                     js_container.code_container,
+                                     adm_template.class,
+                                     adm_template.weight,
+                                     tpl_client.code,
+                                     tpl_client.code,
+                                     tpl_client.code,
+                                     tpl_client.type_code
+                            ";
+
+			if ($stmt = self::$con->prepare($query)) {
+
+				$stmt->bind_param("s", $adata['systemname']);
+			    $stmt->execute();
+			    $stmt->bind_result($url, $title, $systemname, $phpcode, $htmcode,$jscode,$admfclass,$admfweight  ,$tplcodeclient ,$jscodeclient , $phpcodeclient );
+			    $listconstructions=array();
+			    while ($stmt->fetch()) {
+			    	     $listconstructions["address"]          = $url;
+					$listconstructions["name"]                  = $title;
+					$listconstructions["systemname"]            = str_replace("SN_", "", $systemname);
+
+					$listconstructions["phpcode_service"]       = ($phpcode!=null ? $phpcode : "");
+					$listconstructions["tcode_admin"]           = ($htmcode!=null ? $htmcode : "");
+					$listconstructions["jscode_admin"]          = ($jscode!=null ? $jscode : "");
+
+					$listconstructions["phpcode_client"]        = ($phpcodeclient!=null ? $phpcodeclient : "");
+					$listconstructions["tcode_client"]          = ($tplcodeclient!=null ? $tplcodeclient : "");
+					$listconstructions["jcode_client"]          = ($jscodeclient!=null  ? $jscodeclient : "");
+
+
+					$listconstructions["formstyle"]             = ($admfclass!=null ? $admfclass : "col-md-12");
+					$listconstructions["position"]              = $admfweight;
+			    }
+			    $stmt->close();
+			    $listconstructions=json_encode($listconstructions);
+			    self::returnData($listconstructions);
+			}
+		}
+		function doAction_loadpages ($adata){
+
+			$pageCodes=array();
+			$dataPages=array();
+			$query="SELECT
+					  adm_pages.data_key,
+					  adm_pages.gencode,
+					  adm_pages.data,
+					  adm_pages.realname_pages,
+					  adm_pages.isstempates,
+					  adm_pages.stempates
+					FROM adm_pages
+					WHERE adm_pages.data_key = ?";
+
+			if ($stmt = self::$con->prepare($query)) {
+
+			    $stmt->bind_param("s", $adata['systemname']);
+			    $stmt->execute();
+			    $stmt->bind_result($data_key, $gencode, $datacode, $realname_pages, $isstempates, $stempates);
+
+			    while ($stmt->fetch()) {
+			    	    $pageCodes[$gencode] = $datacode;
+			    	    $item=array();
+			    	    $item['name']        = $realname_pages;
+			    	    $item['gencode']     = $gencode;
+			    	    $item['candel']      = true;
+			    	    $item['isstempates'] = $isstempates == 1 ? true : false;
+			    	    $item['stempates']   = $stempates;
+			    	    array_push($dataPages,  $item);
+			    }
+
+			    $arrayReturn = array('pageCodes' =>$pageCodes, 'dataPages' =>$dataPages);
+			    $stmt->close();
+			    $result=json_encode( $arrayReturn);
+			    //self::returnMessage($result, 'Success');
+			   self::returnData($result);
+
+			}
+
+		}
+		function doAction_constructoraddpages ($adata){
+			$all_query_ok=true;
+			
+			$str=trim('SN_').trim(ucfirst($adata['systemname']));
+			/*
+			if (function_exists('mysql_real_escape_string'))
+            {
+                $systemname =trim(mysql_real_escape_string($str));
+            }*/
+           // elseif (function_exists('mysql_escape_string'))
+           // {
+               	$systemname =trim(mysql_escape_string ($str));
+            //}
+			
+		
+			$pages          =$adata['pages'];
+			
+			$db=parent::$mobj['obj']; // Mongo
+			$m_container    = $db->adm_container;
+			
+			/////////////////////////////////////////////////////////////////////////////////////////////////////MONGO
+                     $data_container =array('data_key' => $systemname, 'pages' => $pages);
+
+                     if(!empty($m_container->findOne(array('data_key' => $systemname)))){
+                         $newdata = array('$set' => $data_container);
+                         $m_container->update(array('data_key' => $systemname), $newdata);
+                     }
+                     else{
+                         $m_container->batchInsert(array($data_container));
+                     }
+                     
+             ////////////////////////////////////////////////////////////////////////////////////////////////////END MONGO
+			
+			try {
+				self::$con->autocommit(FALSE);
+				$qd="DELETE FROM adm_pages  WHERE adm_pages.data_key ='$systemname' ";
+				self::$con->query($qd) ? null : $all_query_ok=false;
+				foreach ($pages as $value) {
+				    
+				   
+			/*
+        			if (function_exists('mysql_real_escape_string'))
+                    {
+                        $name        =trim(mysql_real_escape_string (trim($value['name'])));
+					    $gencode     =trim(mysql_real_escape_string (trim($value['gencode'])));
+					    $datacode    =trim(mysql_real_escape_string (trim($value['datacode'])));
+				     	$isstempates =trim(mysql_real_escape_string (trim($value['isstempates']))) == true ? 1 : 0;  
+				    	$stempates   =trim(mysql_real_escape_string (trim($value['stempates']))); 
+                    }
+                    */
+                   // elseif (function_exists('mysql_escape_string'))
+                    //{
+                       	$name        =trim(mysql_escape_string (trim($value['name'])));
+				     	$gencode     =trim(mysql_escape_string (trim($value['gencode'])));
+					    $datacode    =trim(mysql_escape_string (trim($value['datacode'])));
+					    $isstempates =trim(mysql_escape_string (trim($value['isstempates']))) == true ? 1 : 0;  
+					    $stempates   =trim(mysql_escape_string (trim($value['stempates']))); 
+                   // }
+        				    
+				    
+				    
+
+					
+					$q="INSERT INTO `adm_pages` (`realname_pages`, `data_key`, `gencode`, `data`, `isstempates`, `stempates`) VALUES ('$name', '$systemname', '$gencode', '$datacode', '$isstempates', '$stempates');";
+
+					self::$con->query($q) ? null : $all_query_ok=false;
+				}
+				    $all_query_ok ? self::$con->commit() : self::$con->rollback();
+
+				    if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction (insert)==>> ', 'Warning');
+					    exit();
+					}
+				    self::$con->close();
+				    self::returnMessage('Success! pages record  ', 'Success');
+			} catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+				}
+		}
+
+		function doAction_deleteitemconstructions ($adata){
+			$all_query_ok=true;
+			$update=false;
+			
+			
+			$str=trim('SN_').trim(ucfirst($adata['systemname']));
+			/*
+			if (function_exists('mysql_real_escape_string'))
+            {
+                $systemname =trim(mysql_real_escape_string($str));
+            }*/
+           // elseif (function_exists('mysql_escape_string'))
+            //{
+               	$systemname =trim(mysql_escape_string ($str));
+            //}
+			
+			if (array_key_exists('update', $adata)) {
+				$update=$adata['update'];
+			}
+			if($update==false){
+				self::$con->autocommit(FALSE);
+			}
+			try
+			{
+				$qd1="DELETE FROM adm_config    WHERE `config_type`     ='$systemname' ";
+				$qd2="DELETE FROM php_container WHERE `who_container`='$systemname' ";
+				$qd3="DELETE FROM adm_template  WHERE `data_key`        ='$systemname ' ";
+				$qd4="DELETE FROM js_container  WHERE `who_container`  ='$systemname' ";
+				$qd5="DELETE FROM site_client_code  WHERE `machine_name`  ='$systemname' ";
+
+
+				self::$con->query($qd1) ? null : $all_query_ok=false;
+				self::$con->query($qd2) ? null : $all_query_ok=false;
+				self::$con->query($qd3) ? null : $all_query_ok=false;
+				self::$con->query($qd4) ? null : $all_query_ok=false;
+				self::$con->query($qd5) ? null : $all_query_ok=false;
+
+
+			}
+			catch(Exception $e) {
+
+				self::$con->rollback();
+				self::$con->close();
+				self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				exit();
+			}
+
+			if($update==false){
+				$all_query_ok ? self::$con->commit() : self::$con->rollback();
+				if ($all_query_ok==false) {
+		                self::$con->close();
+					self::returnMessage('Failed to commit the transaction (delete)', 'Warning');
+					exit();
+				}
+				self::returnMessage('Delete Success !!!', 'Success');
+			}
+			else{return $all_query_ok;}
+		}
+	}?>

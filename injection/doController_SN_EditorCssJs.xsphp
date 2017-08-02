@@ -1,0 +1,235 @@
+<?php
+class DoController_SN_EditorCssJs extends DoController
+{
+    function doAction_lstsjscss ($adata){
+        
+        $arrayResult = array('js' =>array('auth' =>array(),'site' =>array(),'admin' =>array(),'core' =>array()) ,'css' =>array('auth' =>array(),'site' =>array(),'admin' =>array(),'core' =>array()));
+        
+        $query = "SELECT `idjscss`, `path`, `title`, `type`, `where`, `weght` FROM loader_js_css ORDER BY loader_js_css.`type`, loader_js_css.`where`, loader_js_css.weght";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->execute();
+            $stmt->bind_result($idjscss, $path, $title, $type, $where, $weght);
+            while ($stmt->fetch()) {
+                $arrayItem=array('id'=>$idjscss,'title'=>$title,'type'=>$type,'where'=>$where);
+                array_push($arrayResult[$type][$where], $arrayItem);
+            }
+            $stmt->close();
+        }
+        
+        $result=json_encode($arrayResult);
+    self::returnData($result);
+    }
+    
+   function doAction_getjscss ($adata){
+       $arrayResult=array('title' =>'','path' =>'','oldpath' =>'','isnew' =>true,'otype' =>'','oldotype' =>'','owhat' =>'','id' =>0,'code' =>'');
+       $o_id=trim(mysql_escape_string (trim($adata['obj_id'])));
+       
+       $query = "SELECT   
+                    loader_js_css.idjscss,  
+                    loader_js_css.path,   
+                    loader_js_css.title,   
+                    loader_js_css.type,   
+                    loader_js_css.`where`,  
+                    css_container_general.data_container AS css_data,   
+                    js_container_general.data_container AS js_data,
+                    loader_js_css.`active` 
+                FROM loader_js_css   
+                LEFT OUTER JOIN js_container_general     
+                    ON loader_js_css.path = js_container_general.alias_container   
+                LEFT OUTER JOIN css_container_general     
+                    ON loader_js_css.path = css_container_general.alias_container 
+                WHERE loader_js_css.idjscss = ? 
+   
+                ORDER BY loader_js_css.type, loader_js_css.`where`";
+
+
+    if ($stmt = self::$con->prepare($query)) {
+        $stmt->bind_param("s",$o_id);
+        $stmt->execute();
+        $stmt->bind_result($idjscss, $path, $title, $otype, $owhere, $css_data, $js_data,$active);
+        $stmt->fetch();
+        
+        if($otype=='css'){
+            $arrayResult=array('title' =>$title,'path' =>$path,'oldpath' =>$path,'isnew' =>false,'otype' =>$otype ,'oldotype' =>$otype ,'owhat' =>$owhere,'id' =>$idjscss,'code' =>$css_data,'active'=>$active == 1 ? true : false);
+        }elseif ($otype=='js') {
+            $arrayResult=array('title' =>$title,'path' =>$path,'oldpath' =>$path,'isnew' =>false,'otype' =>$otype ,'oldotype' =>$otype,'owhat' =>$owhere,'id' =>$idjscss,'code' =>$js_data,'active'=>$active == 1 ? true : false);
+        }
+        
+        $stmt->close();
+    }
+    
+        $result=json_encode($arrayResult);
+    self::returnData($result);
+       
+   }
+   function doAction_deletejscss ($adata){
+        $obj=$adata['obj'];
+        $all_query_ok=true;
+        $title=$obj['title'];
+        $path =$obj['path'];
+        $otype=$obj['otype'];
+        $owhat=$obj['owhat'];
+        $oid  =$obj['id'];
+        $isnew=$obj['isnew'];
+        $code =$obj['code'];
+        $oldotype=$obj['oldotype'];
+        $oldpath =$obj['oldpath'];
+        
+       $qd1="DELETE FROM loader_js_css WHERE `path`='$oldpath' ";
+       
+           if($oldotype=='js'){
+               $qd2="DELETE FROM js_container_general WHERE `alias_container`='$oldpath' ";
+           }
+           elseif($oldotype=='css'){
+               $qd2="DELETE FROM css_container_general WHERE `alias_container`='$oldpath' ";
+           }
+        try {
+             self::$con->autocommit(FALSE);
+             self::$con->query($qd1) ? null : $all_query_ok=false;
+             self::$con->query($qd2) ? null : $all_query_ok=false;
+             
+            $all_query_ok ? self::$con->commit() : self::$con->rollback();
+              if ($all_query_ok==false) {
+                self::$con->close();
+                self::returnMessage('Failed to commit the transaction ', 'Warning');
+                exit();
+              }
+              self::returnMessage('Delete Success !!!', 'Success'); 
+             
+        }  catch (Exception $e){
+            self::$con->rollback();
+            self::$con->close();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit();
+       }
+       
+   }
+   function doAction_setjscss ($adata){
+        $obj=$adata['obj'];
+        $all_query_ok=true;
+        $title=$obj['title'];
+        $path =$obj['path'];
+        $otype=$obj['otype'];
+        $owhat=$obj['owhat'];
+        $oid  =$obj['id'];
+        $isnew=$obj['isnew'];
+        $code =$obj['code'];
+        $oldotype=$obj['oldotype'];
+        $oldpath =$obj['oldpath'];
+        $active  =$obj['active'] == true ? 1 : 0;
+        
+        $db=parent::$mobj['obj'];
+        $jscss = $db->js_css_container;
+       
+       if($isnew==true){
+           $maxW=$this->getMaxWeght($otype,$owhat);
+           $q1="INSERT INTO loader_js_css (`title`, `path`, `type`, `where`, `weght`, `active`) VALUES ('$title', '$path', '$otype', '$owhat', '$maxW','$active');";
+       }else {
+           $q1="UPDATE loader_js_css SET `title`='$title',`path`='$path',`type`='$otype',`where`='$owhat',`active`='$active' WHERE `idjscss`='$oid';";
+       }
+       
+       
+       try {
+           self::$con->autocommit(FALSE);
+            
+          
+           self::$con->query($q1) ? null : $all_query_ok=false;
+          
+           if($all_query_ok==true){
+              
+               if($isnew==false){
+                   if($otype!=$oldotype){
+                       $guid=$this->getGUID();
+                       if($oldotype=='js'){
+                           $qd2="DELETE FROM js_container_general WHERE `alias_container`='$oldpath' ";
+                           $qd3="INSERT INTO `css_container_general` (`alias_container`, `key_container`, `data_container`, `update`) VALUES ('$path', '$guid', '$code', '0');";
+                       }
+                       elseif($oldotype=='css'){
+                           $qd2="DELETE FROM css_container_general WHERE `alias_container`='$oldpath' ";
+                           $qd3="INSERT INTO `js_container_general` (`alias_container`, `key_container`, `data_container`, `update`) VALUES ('$path', '$guid', '$code', '0');";
+                       }
+                       self::$con->query($qd2) ? null : $all_query_ok=false;
+                       self::$con->query($qd3) ? null : $all_query_ok=false;
+    
+                   }else{
+                       if($otype=='js'){$qd2="UPDATE js_container_general SET `data_container`='$code',`alias_container`='$path' WHERE `alias_container`='$oldpath';";}
+                       elseif($otype=='css'){$qd2="UPDATE css_container_general SET `data_container`='$code',`alias_container`='$path' WHERE `alias_container`='$oldpath';";}
+                       self::$con->query($qd2) ? null : $all_query_ok=false;
+                   }
+               }else{
+                   $guid=$this->getGUID();
+                   if($otype=='js'){$qd2="INSERT INTO `js_container_general` (`alias_container`, `key_container`, `data_container`, `update`) VALUES ('$path', '$guid', '$code', '0');";}
+                   elseif($otype=='css'){$qd2="INSERT INTO `css_container_general` (`alias_container`, `key_container`, `data_container`, `update`) VALUES ('$path', '$guid', '$code', '0');";}
+                   self::$con->query($qd2) ? null : $all_query_ok=false;
+               }
+               
+                 
+                 $objjscss=array('systemname'=>$path, 'key_container'=>$guid, 'code'=>$code);
+                 
+                 $filter = $oldpath == '' ? $path :  $oldpath;
+                 
+                 if(!empty($jscss->findOne(array('systemname' => $filter)))){
+                     $newdata = array('$set' => $objjscss);
+                     $jscss->update(array('systemname' => $filter), $newdata);
+                 }
+                 else{
+                     $jscss->batchInsert(array($objjscss));
+                 }
+               
+           }
+          
+                          
+      $all_query_ok ? self::$con->commit() : self::$con->rollback();
+      if ($all_query_ok==false) {
+                self::$con->close();
+        self::returnMessage('Failed to commit the transaction ', 'Warning');
+        exit();
+      }
+      self::returnMessage('Save changes Success !!!', 'Success');
+
+       }
+       catch (Exception $e){
+            self::$con->rollback();
+            self::$con->close();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit();
+       }
+       
+   } 
+   
+   function getMaxWeght($t,$w){
+       $r=1;
+       $query = "SELECT MAX(loader_js_css.weght) AS expr1 FROM loader_js_css WHERE loader_js_css.type = ? AND loader_js_css.`where` = ?";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("ss",$t,$w);
+            $stmt->execute();
+            $stmt->bind_result($m);
+            $stmt->fetch();
+            $r.=$m;
+            $stmt->close();
+        }
+        
+        return $r;
+   }
+   
+   function getGUID(){
+      if (function_exists('com_create_guid')){
+        return com_create_guid();
+      }else{
+        mt_srand((double)microtime()*10000);
+        $charid = strtoupper(md5(uniqid(rand(), true)));
+        $hyphen = chr(45);
+        $uuid =
+        substr($charid, 0, 8).$hyphen
+        .substr($charid, 8, 4).$hyphen
+        .substr($charid,12, 4).$hyphen
+        .substr($charid,16, 4).$hyphen
+        .substr($charid,20,12);
+        return $uuid;
+      }
+    }
+    
+   
+}?>

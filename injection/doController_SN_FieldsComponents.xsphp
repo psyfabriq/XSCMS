@@ -1,0 +1,69 @@
+<?php
+	class DoController_SN_FieldsComponents  extends DoController
+	{
+	    function doAction_addcomponent($adata){
+	         $all_query_ok=true;
+	         $title=$adata['title'];
+	         $key  =$this->genGUI();
+	         $q="INSERT INTO site_components (`title`, `key`, `adm_code`) VALUES ('$title', '$key', '');";
+	          try{
+	              self::$con->autocommit(FALSE);
+	              self::$con->query($q) ? null : $all_query_ok=false;
+	              
+	              $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	              
+	               if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction (insert)==>> ', 'Warning');
+					    exit();
+					}
+    	              self::returnMessage('Success! component record  ', 'Success');
+	             
+	          }
+	          catch (Exception $e){
+                    self::$con->rollback();
+                    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+                    exit();
+               }
+	    }
+	    
+	   function doAction_getlistcomponent ($adata){
+	       $arrayRoot= array();
+	       $query = "SELECT   site_components.title, 
+	                          site_components.`key`,   
+	                          site_components.adm_code 
+	                 FROM site_components";
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->execute();
+                $stmt->bind_result($title, $key, $adm_code);
+                while ($stmt->fetch()) {
+                     $arrayItem=array('title'=>$title,'ikey'=>$key,'acode'=>$adm_code);
+                     array_push($arrayRoot,$arrayItem);
+                }
+                $stmt->close();
+            }
+            
+            $result=json_encode($arrayRoot);
+	    	self::returnData($result);
+	   }
+	   
+	   function doAction_getlistwidgets ($adata){
+	       $arrayRoot= array();
+	       $query = "SELECT   site_components.name, 
+	                          site_components.`widget_key`,
+	                          site_components.template 
+	                 FROM site_components";
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->execute();
+                $stmt->bind_result($name, $key, $template);
+                while ($stmt->fetch()) {
+                     $arrayItem=array('name'=>$name,'widget_key'=>$key,'template'=>$template);
+                     array_push($arrayRoot,$arrayItem);
+                }
+                $stmt->close();
+            }
+            
+            $result=json_encode($arrayRoot);
+	    	self::returnData($result);
+	   }
+	}?>

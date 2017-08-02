@@ -1,0 +1,340 @@
+<?php
+class DoController_SN_Template extends DoController
+{
+    function doAction_listtemplates($adata){
+       $tplFolder=Registry::get('TemplateEngine',null,true);               
+       $arrayRoot= array();
+       $query = "SELECT site_template_engine.te_name,
+                        site_template_engine.te_type,
+                        site_template_engine.te_path,
+                        site_template_engine.te_screenshot,
+                        site_template_engine.te_version,
+                        site_template_engine.te_description,
+                        site_template_engine.te_default,
+                        site_template_engine.te_key
+                FROM site_template_engine
+                ORDER BY site_template_engine.te_type, site_template_engine.te_default";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->execute();
+            $stmt->bind_result($te_name, $te_type, $te_path, $te_screenshot, $te_version, $te_description, $te_default, $te_key);
+            while ($stmt->fetch()) {
+                   if($te_default==0){$te_default=false;}
+                   else{$te_default=true;}
+                    
+                    //var_dump($te_screenshot);
+                    
+                    if(empty($te_screenshot)||$te_screenshot==null){
+                       $type = pathinfo('./'.$tplFolder.'no_image.png', PATHINFO_EXTENSION);       
+                       $img=base64_encode(file_get_contents('./'.$tplFolder.'no_image.png')); 
+                    }else{
+                       $type = pathinfo('./'.$te_screenshot, PATHINFO_EXTENSION); 
+                       if (file_exists('./'.$te_screenshot)) {
+                          $gco=file_get_contents('./'.$te_screenshot);
+                       }else {$gco==false;}
+                       if($gco===false){
+                       $type = pathinfo('./'.$tplFolder.'no_image.png', PATHINFO_EXTENSION);       
+                       $gco=file_get_contents('./'.$tplFolder.'no_image.png');
+                       }
+                      
+                       
+                       $img = 'data:image/png;base64,'.base64_encode($gco);
+             
+                    }
+                    
+                	$arrayItem = array('te_name'        => $te_name ,
+					                   'te_type'        => $te_type ,
+					                   'te_path'        => $te_path,
+					                   'te_version'     => $te_version,
+					                   'te_description' => $te_description,
+					                   'te_default'     => $te_default,
+					                   'te_key'         => $te_key,
+					                   'te_screenshot'  => $img);
+				array_push($arrayRoot, $arrayItem);
+            }
+            $stmt->close();
+        }
+         $result=json_encode( $arrayRoot);
+		 self::returnData($result);
+		// self::returnMessage($result, 'Success');
+    }
+    
+    function doAction_getobjtemplate ($adata){
+        $arrayResult=array('title' =>'','file_name' =>'','description' =>'','version' =>'','key' =>'','code'=>'','blocks' => array());
+        $key =$adata['key'];
+        $query = "SELECT   site_template_engine.te_name,   
+                           site_template_engine.te_filename,  
+                           site_template_engine.te_description,   
+                           site_template_engine.te_version,   
+                           site_template_engine.te_key,
+                           site_template_engine.te_path
+                  FROM site_template_engine WHERE site_template_engine.te_key = ?";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s", $key);
+            $stmt->execute();
+            $stmt->bind_result($te_name, $te_filename, $te_description, $te_version, $te_key, $te_path);
+            $stmt->fetch();
+            $file_code=base64_encode(file_get_contents('./'.$te_path));
+            $arrayResult=array('title' =>$te_name,'file_name' =>$te_filename,'description' =>$te_description,'version' =>$te_version,'key' =>$te_key,'code'=>$file_code,'blocks' => array());
+            
+            $stmt->close();
+        }
+        
+          foreach ($arrayResult as $key => $item) {
+             $arrayResult['blocks']  =$this->gettemplateblocks($arrayResult['key']);
+             $arrayResult['poligons']=$this->gettemplatepoligons($arrayResult['key']); 
+          }
+        
+         $result=json_encode( $arrayResult);
+		 self::returnData($result);
+    }
+    
+    function gettemplateblocks($key){
+        $arrayResult=array();
+        $query = "SELECT te_name,te_description,te_version,te_key,te_filename,te_path
+                    FROM site_template_engine_blocks
+                    WHERE site_template_engine_blocks.te_key_parent = ? ";
+                    
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s", $key);
+            $stmt->execute();
+            $stmt->bind_result($te_name, $te_description, $te_version, $te_key, $te_filename,$te_path);
+            while($stmt->fetch()){
+                $file_code=base64_encode(file_get_contents('./'.$te_path));
+                $arrayItem=array('title' =>$te_name,'file_name' =>$te_filename,'description' =>$te_description,'version' =>$te_version,'key' =>$te_key,'code'=>$file_code);
+                $arrayResult[$te_key] =$arrayItem;
+            }
+            $stmt->close();
+        }  
+        
+        return $arrayResult;
+    }
+    
+      function gettemplatepoligons($key){
+        $arrayResult=array();
+        $query = "SELECT po_name,po_mashine_name,po_description
+                    FROM site_template_engine_poligons
+                    WHERE site_template_engine_poligons.te_key_parent = ? ";
+                    
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s", $key);
+            $stmt->execute();
+            $stmt->bind_result($po_name, $po_machinename, $po_description);
+            while($stmt->fetch()){
+                $arrayItem=array('name' =>$po_name,'machinename' =>$po_machinename,'description' =>$po_description);
+                array_push($arrayResult, $arrayItem);
+            }
+            $stmt->close();
+        }  
+        
+        return $arrayResult;
+    }
+
+    function doAction_scantemplates ($adata){
+        $tplFolder=Registry::get(TemplateEngine,null,true);
+        $array_file_path = $this->find($tplFolder, "xscms.info");
+        $this->cleanTemplates();
+        foreach ($array_file_path as $value) {
+            $string = file_get_contents('./'.$value, true);
+            $json_a = json_decode($string, true);
+            foreach ($json_a as $key => $item) {
+
+                     $path=str_replace("xscms.info","",$value);
+                     $r=$this->writeToDb($json_a[$key],$path);
+                     if($r!==false){
+                        $json_a[$key]=$r;    
+                     }
+                      
+                }
+
+            }
+
+            $fp = fopen($value, 'w');
+            fwrite($fp, json_encode($json_a,JSON_PRETTY_PRINT));
+            fclose($fp);
+            self::returnMessage('Templates registered ', 'Success');
+        }
+
+
+    function cleanTemplates(){
+        	$qd1="DELETE FROM site_template_engine";
+			$qd2="DELETE FROM site_template_engine_blocks";
+			$qd3="DELETE FROM site_template_engine_poligons";
+			$qs ="ALTER TABLE site_template_engine AUTO_INCREMENT=1;";
+			$qs2="ALTER TABLE site_template_engine_blocks AUTO_INCREMENT=1;";
+			$qs3="ALTER TABLE site_template_engine_poligons AUTO_INCREMENT=1;";
+			try {
+			   
+    			self::$con->autocommit(FALSE);
+    			self::$con->query($qd1);
+    			self::$con->query($qd2);
+    			self::$con->query($qd3);
+    			self::$con->commit();
+    			self::$con->query($qs);
+                self::$con->query($qs2);
+                self::$con->query($qs3);
+                self::$con->commit();
+			}catch (Exception $e){
+                self::$con->rollback();
+                self::returnMessage('Error : ( '.$e.' )', 'Warning');
+           }
+    }
+    
+    function writeToDb($a_object,$path){
+        $all_query_ok   =true;
+        $gui_key        =self::genGUI();
+        $te_name        =$a_object['name'];
+        $te_type        =$a_object['type'];
+        $te_path        =$path.$a_object['file'];
+        $te_screenshot  =$path.$a_object['screenshot'];
+        $te_version     =$a_object['version'];
+        $te_description =$a_object['description'];
+        $te_default     =0;
+        $te_key         =$gui_key;
+        $te_filename    =$a_object['file'];
+
+         $q1="INSERT INTO site_template_engine (`te_name`, `te_type`, `te_path`, `te_screenshot`, `te_version`, `te_description`, `te_default`, `te_key`,`te_filename`)
+              VALUES ('$te_name', '$te_type', '$te_path', '$te_screenshot', '$te_version', '$te_description', '$te_default', '$te_key','$te_filename');";
+        try {
+               self::$con->autocommit(FALSE);
+               
+               self::$con->query($q1) ? null : $all_query_ok=false;
+              
+               if(array_key_exists('blocks', $a_object)&&$all_query_ok==true){
+                   foreach ($a_object['blocks'] as $key => $value) {
+                      $gui_key_block        =self::genGUI(); 
+                      $te_name_block        =$value['name'];
+                      $te_version_block     =$value['version'];
+                      $te_description_block =$value['description'];
+                      $te_key_block         =$gui_key_block;
+                      $te_key_parent_block  =$gui_key;
+                      $te_filename_block    =$value['file'];
+                      $te_path_block        =$path.'blocks/'.$value['file'];
+                      
+                      $q2="INSERT INTO site_template_engine_blocks (`te_name`, `te_version`, `te_description`, `te_key`, `te_key_parent`,`te_filename`,`te_path`)
+                            VALUES ('$te_name_block', '$te_version_block', '$te_description_block', '$te_key_block', '$te_key_parent_block','$te_filename_block','$te_path_block');";
+                      
+                      if($all_query_ok==true){
+                          self::$con->query($q2) ? null : $all_query_ok=false;
+                          if($all_query_ok==true){$a_object['blocks']['code']=$gui_key_block;}
+                      }      
+                      else{self::returnMessage('Template not registered => '.$te_name, 'Warning'); exit;}      
+                    }
+               }
+               
+               if(array_key_exists('poligons', $a_object)&&$all_query_ok==true){
+                   foreach ($a_object['poligons'] as $key => $value) {
+                       $po_name              =$value['name'];
+                       $po_description       =$value['description'];
+                       $po_machine_name      =$value['mashinename'];
+                       $te_key_parent        =$gui_key;
+                       $fhash    =md5("P".$po_machine_name."F".$te_key_parent_block."Q");
+                       
+                      $qp="INSERT INTO site_template_engine_poligons (`po_name`, `po_mashine_name`, `po_description`, `te_key_parent`, `fhash`)
+                        VALUES ('$po_name', '$po_machine_name', '$po_description', '$te_key_parent', '$fhash');";
+                      self::$con->query($qp) ? null : $all_query_ok=false;
+             
+                   }
+               }
+
+               $all_query_ok ? self::$con->commit() : self::$con->rollback();
+
+                     if ($all_query_ok==false) {
+                        self::returnMessage('Template not registered => '.$te_name, 'Warning');
+                        exit;
+                      }
+                      else{
+                           $a_object['code']=$gui_key;
+                           //self::returnMessage('Template registered => '.$te_name, 'Success');
+                           return $a_object;
+
+                          }
+
+        } catch (Exception $e){
+            self::$con->rollback();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit;
+
+       }
+    }
+
+
+    function doAction_savetemplate($adata){
+
+         $tplObj=json_decode($adata["templateobj"],true);
+          try {
+             $tplObjKey   =trim(mysql_escape_string($tplObj["key"]));
+             $tplObjCode  =$tplObj["code"];
+             $tplBlocksObj=$tplObj["blocks"];
+             
+             $query_root =  "SELECT
+                              site_template_engine.te_path
+                            FROM site_template_engine
+                            WHERE site_template_engine.te_key = ?";
+            
+              if ($stmt = self::$con->prepare($query_root)) {
+                $stmt->bind_param("s", $tplObjKey);
+                $stmt->execute();
+                $stmt->bind_result($te_path);
+                $stmt->fetch();
+                file_put_contents('./'.$te_path, base64_decode($tplObjCode));
+                $stmt->close();
+                
+                
+                
+           $query_block =     "SELECT
+                                  site_template_engine_blocks.te_path
+                                FROM site_template_engine_blocks
+                                WHERE site_template_engine_blocks.te_key = ?
+                                AND site_template_engine_blocks.te_key_parent = ?";    
+                
+             foreach ($tplBlocksObj as $key => $value) {
+                
+                $tplObjBlockKey  =trim(mysql_escape_string($value["key"]));
+                $tplObjBlockCod  =$value["code"];
+                 
+                if ($stmt = self::$con->prepare($query_block)) {
+                    $stmt->bind_param("ss", $tplObjBlockKey,$tplObjKey);
+                    $stmt->execute();
+                    $stmt->bind_result($te_path);
+                    $stmt->fetch();
+                    file_put_contents('./'.$te_path, base64_decode($tplObjBlockCod));
+                    $stmt->close();
+                }
+                
+                 
+             }
+         
+            }  
+               
+            self::returnMessage('Template save change !!!', 'Info');        
+          } catch (Exception $e){
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit;
+
+       }                   
+         
+         
+        
+    }
+    
+    
+    
+    function find($dir, $tosearch) {
+        $result = array();
+        $files = array_diff( scandir( $dir ), Array( ".", ".." ) );
+        foreach( $files as $d ) {
+                if( !is_dir($dir."/".$d) ) {
+                    if ($d == $tosearch)
+                        return $dir."/".$d;
+                } else {
+
+                    $res = $this->find($dir.$d, $tosearch);
+                    if ($res)
+                        array_push($result, $res);
+                }
+        }
+        return $result;
+    }
+}?>

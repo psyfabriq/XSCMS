@@ -1,0 +1,170 @@
+<?php
+	class DoController_SN_Media extends DoController
+	{
+		function doAction_listdirectory($adata){
+		    
+		    $arrayRoot = array();
+		    $imagesFolder = substr(Registry::get('SiteIMG',null,true), 0, -1);
+		    if (substr($adata["path"], -1) == '/') {
+                $adata["path"] = substr($adata["path"], 0, -1);
+            }
+		    
+		    $dir = $imagesFolder.$adata["path"].'/'; 
+		    
+		    $files = array_diff( scandir( $dir ), Array( ".", ".." ) );
+            foreach( $files as $d ) {
+                
+                    if(is_dir($dir.$d) ) {
+                        
+                        $arrayItem = array( 
+                                                'name'   => basename($d),
+                                                'rights' => self::getPermissions($dir.$d),
+                                                'size'   => self::getFolderSize($dir.$d),
+                                                'time'   => date ("Y-m-d H:i:s", filemtime($dir.$d)),
+                                                'type'   => 'dir'
+                                              );
+                             array_push($arrayRoot,$arrayItem); 
+                             
+                             
+                      
+                    } elseif(is_file($dir.$d)){
+                        $arrayItem = array( 
+                                                'name'       => basename($d),
+                                                'rights'     => self::getPermissions($dir.$d),
+                                                'size'       => filesize($dir.$d),
+                                                'time'       => date ("Y-m-d H:i:s", filemtime($dir.$d)),
+                                                'type'       => 'file',
+                                                'isimage'    => exif_imagetype($dir.$d) ? true : false,
+                                                'url'        => '../'.$dir.$d
+                                              );
+                             array_push($arrayRoot,$arrayItem);
+                    }
+            }
+		    
+			//$test='{"result": [{"name": "folder_one", "rights": "drwxr-xr-x", "size": "4096", "time": "16:07", "type": "dir" }, {"name": "folder_two", "rights": "drwxr-xr-x", "size": "4096", "time": "17:42", "type": "dir" }, {"name": ".htaccess", "rights": "-rw-r--r--", "size": "0", "time": "17:42", "type": "file" }, {"name": "index.php", "rights": "-rw-r--r--", "size": "0", "time": "17:41", "type": "file"}]}'; 
+		
+			self::returnData(json_encode(array('result' => $arrayRoot)));
+		}
+		
+		
+	
+
+		function doAction_addfolder($adata){
+		    $imagesFolder = substr(Registry::get('SiteIMG',null,true), 0, -1).'/';
+		    
+		    if (substr($adata["path"], -1) == '/') {
+                $adata["path"] = substr($adata["path"], 0, -1);
+            }
+            
+            $dir = $adata["path"]!="" ? $imagesFolder.$adata["path"].'/' : $imagesFolder ;
+            
+            $newFolder = $dir.$adata["name"].'/';
+            
+            if(!is_dir($newFolder)) {
+                mkdir($newFolder); 
+                chmod($newFolder, 0775); 
+            }
+            
+			//self::returnData($newFolder);
+		}
+
+		function doAction_itemrename($adata){
+		    $imagesFolder = substr(Registry::get('SiteIMG',null,true), 0, -1);
+		    if (substr($adata["path"], -1) == '/') {
+                $adata["path"] = substr($adata["path"], 0, -1);
+            }
+            
+            if (substr($adata["newPath"], -1) == '/') {
+                $adata["newPath"] = substr($adata["newPath"], 0, -1);
+            }
+            
+            if(rename($imagesFolder.$adata["path"], $imagesFolder.$adata["newPath"])){
+                self::returnMessage('Success! rename :)', 'Success');
+            }else{
+                self::returnMessage('Error : rename ;(', 'Warning');
+            }
+            
+		}
+
+		function doAction_itemcopy($adata){
+			self::returnData(json_encode($adata));
+		}
+
+		function doAction_itemdelete($adata){
+		    $imagesFolder = substr(Registry::get('SiteIMG',null,true), 0, -1);
+		    
+		    if (substr($adata["path"], -1) == '/') {
+                $adata["path"] = substr($adata["path"], 0, -1);
+            }
+            
+            $delItem = $adata["path"]!="" ? $imagesFolder.$adata["path"] : null ;
+            
+            if($adata["path"]!==""){
+                if (is_dir($delItem)) {
+                    self::deleteDir($delItem);
+                }else{
+                    unlink($delItem);
+                }
+            }
+            
+			//self::returnData($delItem);
+		}
+		
+		private static function deleteDir($dirPath) {
+            if (! is_dir($dirPath)) {
+                throw new InvalidArgumentException("$dirPath must be a directory");
+            }
+            if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') {
+                $dirPath .= '/';
+            }
+            $files = glob($dirPath . '*', GLOB_MARK);
+            foreach ($files as $file) {
+                if (is_dir($file)) {
+                    self::deleteDir($file);
+                } else {
+                    unlink($file);
+                }
+            }
+            rmdir($dirPath);
+        }
+        function doAction_itemupload($adata){
+           //
+                $imagesFolder = substr(Registry::get('SiteIMG',null,true), 0, -1);
+                if (substr($adata["destination"], -1) == '/') {
+                    $adata["destination"] = substr($adata["destination"], 0, -1);
+                }
+                
+                $dir =$adata["destination"]!="" ? $imagesFolder.$adata["destination"].'/' : $imagesFolder.'/';
+                
+            
+                foreach ($adata["filelist"] as $item) {
+                     $p = substr(strrchr($item['filename'], '.'), 1);
+                     $filepath='./'.$dir.$item['filename'];
+                     $tn_image = new Thumbnail();
+                    // $tn_image->setSize(150,150);
+                    // $tn_image->setQuality(75);
+                     $tn_image->setFileData(base64_decode($item["base64"]),$p);
+                     $tn_image->save($filepath);
+                     //self::returnData($item["base64"]);
+                }
+                
+               
+               // self::returnData(json_encode($adata)); 
+        } 
+		function doAction_itemwnload($adata){
+			self::returnData(json_encode($adata["filelist"]));
+		}
+
+		function doAction_itemcompress($adata){
+			self::returnData(json_encode($adata));
+		}
+
+		function doAction_itemeditfile($adata){
+
+			$test='{"result": "xvdhcvndkbhjksda.fhvsjlkfgj"}';
+		    self::returnData($test);
+		}
+
+
+	}
+?>

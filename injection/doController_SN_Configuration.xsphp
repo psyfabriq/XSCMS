@@ -1,0 +1,19 @@
+<?php
+	class DoController_SN_Configuration extends DoController
+	{
+		function  doAction_getconfigs ($adata){
+		    $result='{';
+			$query = "SELECT GROUP_CONCAT(settings_value) as jsettings FROM site_settings";
+			if ($stmt = self::$con->prepare($query)) {
+			    $stmt->execute();
+			    $stmt->bind_result($jsettings);
+			    $stmt->fetch();
+			        $result.=$jsettings;
+			    $stmt->close();
+			}
+			$result.='}';
+			self::returnData($result);
+		}
+		
+	}
+?>

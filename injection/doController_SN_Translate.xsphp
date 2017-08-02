@@ -1,0 +1,68 @@
+<?php
+	class DoController_SN_Translate extends DoController
+	{
+	    function doAction_listlanguages ($adata){
+	        
+	        $arrayRoot      = array();
+	        
+	        $query_list_lang =   "SELECT
+                                      site_languages.title,
+                                      site_languages.lang_key,
+                                      site_languages.active
+                                    FROM site_languages";
+             if ($stmt = self::$con->prepare($query_list_lang)) {
+    	             $stmt->execute();
+        		     $stmt->bind_result($title, $lang_key, $active); 
+        		      while ($stmt->fetch()) {
+    		             array_push($arrayRoot, array('language'    =>$title,
+    		                                          'lang_key' =>$lang_key,
+    		                                          'active'   =>$active == 1 ? 'enable' : 'disable'));
+    		                                          
+            		   }
+            		  $stmt->close();
+        		     
+    	         }
+    	         $result=json_encode($arrayRoot);
+    	         self::returnData($result);
+	    }
+	    
+	    function doAction_savechangeslang ($adata){
+	        
+	    }
+	    
+	    function doAction_listtokens($adata){
+	        
+	        $arrayRoot        = array();
+	        
+	        $query_list_token =     "SELECT
+                                      site_languages_token.token_title,
+                                      site_languages_token.token_key,
+                                      GROUP_CONCAT(site_languages_token_value.lang_key) AS token_langs,
+                                      GROUP_CONCAT(site_languages_token_value.token_value) AS token_values
+                                    FROM site_languages_token
+                                      LEFT OUTER JOIN site_languages_token_value
+                                        ON site_languages_token.token_key = site_languages_token_value.token_key
+                                    GROUP BY site_languages_token.token_title";
+                                    
+             if ($stmt = self::$con->prepare($query_list_token)) {
+    	             $stmt->execute();
+        		     $stmt->bind_result($token_title, $token_key, $token_langs , $token_values); 
+        		      while ($stmt->fetch()) {
+    		             array_push($arrayRoot, array('token_title'  =>$token_title,
+    		                                          'token_key'    =>$token_key,
+    		                                          'token_langs'  =>$token_langs,
+    		                                          'token_values' =>$token_values
+    		                                          ));
+    		                                          
+            		   }
+            		  $stmt->close();
+        		     
+    	         }
+    	         
+    	         $result=json_encode($arrayRoot);
+    	         self::returnData($result);
+	        
+	    }
+	    
+	    
+	}?>
