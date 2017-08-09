@@ -1,0 +1,453 @@
+ <?php
+	class DoController_SN_Blocks extends DoController
+	{
+	    function doAction_listblocks ($adata){
+	        $arrayRoot      = array();
+	        
+	        $query_list_blocks = "SELECT
+                                  site_blocks.title,
+                                  site_blocks.type,
+                                  site_blocks.active,
+                                  site_blocks.block_key,
+                                  site_blocks.date,
+                                  site_blocks.author,
+                                  site_blocks.weight,
+                                  site_template_engine.te_name AS theme,
+                                  site_template_engine_poligons.po_name AS place,
+                                  site_blocks.name
+                                FROM site_blocks
+                                  LEFT OUTER JOIN site_template_engine
+                                    ON site_blocks.theme = site_template_engine.te_key
+                                  LEFT OUTER JOIN site_template_engine_poligons
+                                    ON site_blocks.theme = site_template_engine_poligons.te_key_parent
+                                    AND site_blocks.place = site_template_engine_poligons.po_mashine_name";
+             if ($stmt = self::$con->prepare($query_list_blocks)) {
+    	             $stmt->execute();
+        		     $stmt->bind_result($title, $type, $active, $block_key,$date,$author,$weight,$theme,$place,$name); 
+        		      while ($stmt->fetch()) {
+        		          $type_name='';
+        		         if($type=='view_mod'){$type_name='View Mod';}elseif ($type=='menu_mod') {$type_name='Menu Mod';}elseif ($type=='custom_mod') {$type_name='Custom Mod';}
+    		             array_push($arrayRoot, array('block_name'  =>$name,
+    		                                          'block_title' =>$title,
+    		                                          'block_type'  =>$type_name, 
+    		                                          'block_active'=>$active == 1 ? 'enable' : 'disable', 
+    		                                          'block_key'   =>$block_key, 
+    		                                          'block_theme' =>$theme, 
+    		                                          'block_place' =>$place, 
+    		                                          'date'        =>$date, 
+    		                                          'author'      =>$author, 
+    		                                          'weight'      =>$weight));
+            		   }
+            		  $stmt->close();
+        		     
+    	         }
+    	         $result=json_encode($arrayRoot);
+    	         self::returnData($result);
+	    }
+	    
+	    function doAction_getviewcode ($adata){
+	         $vkey=$adata['vkey'];
+	         $result='';
+	         
+	          $query_poligons = "SELECT
+                                  site_contenttype_view.code AS code,
+                                  site_contenttype_view.node_title AS title,
+                                  site_contenttype_view.show_node_title AS show_title,
+                                  site_contenttype_view.node_title_automatic AS title_automatic
+                                FROM site_contenttype_view
+                                WHERE site_contenttype_view.is_this_block = 1
+                                AND site_contenttype_view.`key` = ?";
+                 if ($stmt = self::$con->prepare($query_poligons)) {
+	                 $stmt->bind_param("s", $vkey);
+    	             $stmt->execute();
+        		     $stmt->bind_result($code, $title, $show_title, $title_automatic); 
+        		     $stmt->fetch();
+        		     $stmt->close();
+        		     
+    	         }
+	        $result=json_encode(array('code' =>$code, 'title'=>$title, 'showtitle'=>$show_title == 1 ? true : false, 'titleautomatic'=>$title_automatic == 1 ? true : false));
+    	    self::returnData($result); 
+	    }
+	    function doAction_loabjects($adata){
+	        $arrayRoot      = array();
+	        
+
+	        $listBlocksTyps    = array();
+	        $listThems         = array();
+	        $listPlaces        = array();
+	        $listMenus         = array();
+	        $listContentTypes  = array();
+	        $listViews         = array();
+	        
+	        
+	         array_push($listBlocksTyps, array('label' =>"View Mod",'value'=>"view_mod"));
+	         array_push($listBlocksTyps, array('label' =>"Menu Mod",'value'=>"menu_mod"));
+	         array_push($listBlocksTyps, array('label' =>"Custom Mod",'value'=>"custom_mod"));
+	         
+	         $query_thems = "SELECT
+                              site_template_engine.te_name AS label,
+                              site_template_engine.te_key AS value
+                            FROM site_template_engine";
+	         if ($stmt = self::$con->prepare($query_thems)) {
+	             
+	             $stmt->execute();
+    		     $stmt->bind_result($label, $value); 
+    		     while ($stmt->fetch()) {
+    		           array_push($listThems, array('label' =>$label,'value'=>$value));
+    		     }
+    		     $stmt->close();
+	         }
+	         
+	         
+	         foreach ($listThems as $itemValue) {
+	     
+	             $itemsPlaces = array();
+	             $key         =$itemValue['value'];
+	             $query_poligons = "SELECT
+                                      site_template_engine_poligons.po_name AS label,
+                                      site_template_engine_poligons.po_mashine_name AS value
+                                    FROM site_template_engine_poligons
+                                    WHERE site_template_engine_poligons.te_key_parent = ?";
+                 if ($stmt = self::$con->prepare($query_poligons)) {
+	                 $stmt->bind_param("s", $key);
+    	             $stmt->execute();
+        		     $stmt->bind_result($label, $value); 
+        		     while ($stmt->fetch()) {
+        		           array_push($itemsPlaces, array('label' =>$label,'value'=>$value));
+        		     }
+        		     $stmt->close();
+    	         }
+
+    	         $listPlaces[$key]=$itemsPlaces;
+	         }
+	         
+	         
+	         
+	           $query_menus_site = "SELECT
+                                      site_typmenu.title AS label,
+                                      site_typmenu.data_key AS value
+                                    FROM site_typmenu";
+    	         if ($stmt = self::$con->prepare($query_menus_site)) {
+    	             
+    	             $stmt->execute();
+        		     $stmt->bind_result($label, $value); 
+        		     while ($stmt->fetch()) {
+        		           array_push($listMenus, array('label' =>$label." (s)",'value'=>$value));
+        		     }
+        		     $stmt->close();
+    	         }
+    	         
+    	         $query_menus_adm = "SELECT
+                                      adm_typmenu.title AS label,
+                                      adm_typmenu.data_key AS value
+                                    FROM adm_typmenu";
+    	         if ($stmt = self::$con->prepare($query_menus_adm)) {
+    	             
+    	             $stmt->execute();
+        		     $stmt->bind_result($label, $value); 
+        		     while ($stmt->fetch()) {
+        		           array_push($listMenus, array('label' =>$label." (a)",'value'=>$value));
+        		     }
+        		     $stmt->close();
+    	         }
+	         
+	          $query_content_type = "SELECT
+                                      site_contenttype.contenttype_name AS label,
+                                      site_contenttype.contenttype_mashine_name AS value
+                                    FROM site_contenttype";
+	         if ($stmt = self::$con->prepare($query_content_type)) {
+	             
+	             $stmt->execute();
+    		     $stmt->bind_result($label, $value); 
+    		     while ($stmt->fetch()) {
+    		           array_push($listContentTypes, array('label' =>$label,'value'=>$value));
+    		     }
+    		     $stmt->close();
+	         }
+	         
+	       foreach ($listContentTypes as $itemValue) {
+	     
+	             $itemsViews = array();
+	             $key         =$itemValue['value'];
+	             $query_views = "SELECT
+                                  site_contenttype_view.title AS label,
+                                  site_contenttype_view.`key` AS value
+                                FROM site_contenttype_view
+                                WHERE site_contenttype_view.is_this_block = 1
+                                AND site_contenttype_view.mashine_name = ?";
+                 if ($stmt = self::$con->prepare($query_views)) {
+	                 $stmt->bind_param("s", $key);
+    	             $stmt->execute();
+        		     $stmt->bind_result($label, $value); 
+        		     while ($stmt->fetch()) {
+        		           array_push($itemsViews, array('label' =>$label,'value'=>$value));
+        		     }
+        		     $stmt->close();
+    	         }
+
+    	         $listViews[$key]=$itemsViews;
+	         }
+	         
+	         
+	         
+	        $arrayRoot['blocktyps']      =$listBlocksTyps;
+	        $arrayRoot['thems']          =$listThems;
+	        $arrayRoot['place']          =$listPlaces;
+	        $arrayRoot['menus']          =$listMenus;
+	        $arrayRoot['contenttype']    =$listContentTypes;
+	        $arrayRoot['views']          =$listViews;
+	        $arrayRoot['maxweight']      =self::getMaxWeght();
+	        
+	        $result=json_encode($arrayRoot);
+    	    self::returnData($result); 
+	    }
+	    
+	      function getMaxWeght(){
+               $r=1;
+               $query = "SELECT MAX(site_blocks.weight) AS expr1 FROM site_blocks ";
+        
+                if ($stmt = self::$con->prepare($query)) {
+                    $stmt->execute();
+                    $stmt->bind_result($m);
+                    $stmt->fetch();
+                    $r.=$m;
+                    $stmt->close();
+                }
+                
+                return $r;
+           }
+	    function doAction_delblock($adata){
+	        $all_query_ok=true;
+	        $bkey        = trim(mysql_escape_string (trim($adata['vkey']))); 
+	        $q1="DELETE FROM `site_blocks` WHERE `block_key`='$bkey';";
+	        $q2="DELETE FROM `site_blocks_additional` WHERE `block_key`='$bkey';";
+	        self::$con->autocommit(false);
+	        self::$con->query($q1) ? null : $all_query_ok=false;
+	        self::$con->query($q2) ? null : $all_query_ok=false;
+	        $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	        
+	        if ($all_query_ok==false) {
+			    	self::$con->close();
+				    self::returnMessage('Failed to commit the transaction', 'Warning');
+				    exit();
+				}
+			 self::returnMessage('Success! ', 'Success');
+	    }
+	    
+	    function doAction_setblock($adata){
+	        $all_query_ok=true;
+	        $obj=$adata['blockObj'];
+	        
+	        $bname     =$obj['name'];                                                            unset($obj['name']);
+	        $btitle    =$obj['title'];                                                           unset($obj['title']);
+	        $btype     =$obj['type'];                                                            unset($obj['type']);
+	        $bdate     =date("Y-m-d", $obj['date']);                                             unset($obj['date']);
+	        $theme     =$obj['theme'];                                                           unset($obj['theme']);
+	        $place     =$obj['place'];                                                           unset($obj['place']);
+	        $bkey      =$obj['key'];                                                         
+	        $bweight   =$obj['weight'];                                                          unset($obj['weight']);
+	        $author    =$obj['author'];                                                          unset($obj['author']);
+	        $bactive   =$obj['active']        == true ? 1 : 0;                                   unset($obj['active']);
+	        $showtitle =$obj['showtitle']     == true ? 1 : 0;                                   unset($obj['showtitle']);
+	        $isNew     =$obj['isnew']         == true ? 1 : 0;                                   unset($obj['isnew']);
+	        $isUpdate  =$obj['isupdate']      == true ? 1 : 0;                                   unset($obj['isupdate']);
+	        $autotitle =$obj['type'] == 'view_mod'? $obj['showtitleauto'] == true ? 1 : 0 : 0 ;  unset($obj['showtitleauto']);
+	        $code      =$obj['type'] == 'view_mod'? '': $obj['code'];                            unset($obj['code']);
+	        $comment   =$obj['comment'];                                                         unset($obj['comment']);
+	        
+	        if($isNew==true){
+	             $q1="INSERT INTO `site_blocks` (`name`,
+	                                             `title`,
+	                                             `type`,
+	                                             `active`, 
+	                                             `block_key`,
+	                                             `date`, 
+	                                             `theme`, 
+	                                             `place`, 
+	                                             `author`, 
+	                                             `weight`, 
+	                                             `code`,
+	                                             `comment`,
+	                                             `title_show`, 
+	                                             `title_auto`) 
+	                        VALUES ('$bname', 
+	                                '$btitle', 
+	                                '$btype',
+	                                '$bactive', 
+	                                '$bkey', 
+	                                '$bdate', 
+	                                '$theme',
+	                                '$place',
+	                                '$author',
+	                                '$bweight',
+	                                '$code',
+	                                '$comment',
+	                                '$showtitle',
+	                                '$autotitle');";
+	                                
+	                           
+	                                
+	        }elseif($isUpdate==true){
+                $q1="UPDATE `site_blocks` SET 
+                            `name`='$bname',
+                            `title`='$btitle',
+                            `type`='$btype',
+                            `active`='$bactive', 
+                            `date`='$bdate',
+                            `theme`='$theme',
+                            `place`='$place',
+                            `weight`='$bweight', 
+                            `code`='$code', 
+                            `title_show`='$showtitle',
+                            `title_auto`='$autotitle',
+                            `comment`='$comment'
+                    WHERE `block_key`='$bkey';";
+                    
+
+	        }
+	        
+	        try {
+	       //$qs="ALTER TABLE $table_menu AUTO_INCREMENT=$max;"; 
+	         self::$con->autocommit(false);
+	         self::$con->query($q1) ? null : $all_query_ok=false;
+	         
+	         $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	         self::cleanAdditionals($all_query_ok ,$bkey);
+	         self::setAdditionals($all_query_ok,$obj);
+	          
+	               if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction', 'Warning');
+					    exit();
+					}
+				 self::returnMessage('Success! ', 'Success');
+				 
+	        }catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+			}
+	    }
+	    
+	    function cleanAdditionals(&$all_query_ok=false ,$block_key){
+	        $table_name='site_blocks_additional';
+	        if($all_query_ok==true){
+                     $qd="DELETE FROM `$table_name` WHERE `block_key`='$block_key';"; 
+                      self::$con->query($qd);
+                      if (!self::$con->commit()) {
+                            $all_query_ok=false;
+                            self::returnMessage('ERROR', 'Warning');
+                      }else{
+                         
+                              self::$con->autocommit(true); 
+                              if ($stmt = self::$con->prepare("SELECT MAX(`id`) AS `id` FROM `$table_name`;"))
+                                 {
+                                    $stmt->execute();
+                                    $stmt->bind_result($max);
+                                    $stmt->fetch();
+                                    $stmt->close();
+                                    if($max==null){$max=1;}else{$max++;}
+                                    $qs="ALTER TABLE $table_name AUTO_INCREMENT=$max;";
+                                    self::$con->query($qs);
+                                 }
+                             
+                      }
+            }
+	    }
+	    
+	    function setAdditionals(&$all_query_ok=false,$arrObj){
+	         if($all_query_ok==true){
+	             $baKey=$arrObj['key']; unset($arrObj['key']);
+	             $q='';
+	             if(!empty($arrObj)){
+	                  self::$con->autocommit(false);
+    	             foreach ($arrObj as $key => $value){
+    	                 $fhash    =md5("P".$baKey."F".$key."Q");
+    	                 $q="INSERT INTO `site_blocks_additional` (`block_key`, `additional_key`, `additional_value`, `hash`) VALUES ('$baKey', '$key', '$value', '$fhash'); ";
+    	                  self::$con->query($q) ? null : $all_query_ok=false;
+    	             }
+    	           
+	                 $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	                 
+	                 if(!$all_query_ok){
+	                     self::returnMessage('Error : ( '.self::$con->connect_error.' )', 'Warning');
+	                     exit();
+	                 }
+	             }
+	         }
+	    }
+	    
+	    function doAction_getblock($adata){
+	        $bkey=$adata['bkey'];
+	        $itemObject=array();
+	        $query="SELECT
+                      site_blocks.name,
+                      site_blocks.title,
+                      site_blocks.type,
+                      site_blocks.active,
+                      site_blocks.block_key,
+                      site_blocks.date,
+                      site_blocks.theme,
+                      site_blocks.place,
+                      site_blocks.author,
+                      site_blocks.weight,
+                      site_blocks.code,
+                      site_blocks.comment,
+                      site_blocks.title_show,
+                      site_blocks.title_auto
+                    FROM site_blocks
+                    WHERE site_blocks.block_key = ?";
+              if ($stmt = self::$con->prepare($query)) {
+	                 $stmt->bind_param("s", $bkey);
+    	             $stmt->execute();
+        		     $stmt->bind_result($name, $title, $type, $active, $block_key, $date, $theme, $place, $author, $weight, $code, $comment, $title_show, $title_auto); 
+        		     
+        		     $stmt->fetch();
+        		     
+        		     $itemObject['name']           =$name;
+        		     $itemObject['title']          =$title;
+        		     $itemObject['type']           =$type;
+        		     $itemObject['date']           =strtotime($date);
+        		     $itemObject['theme']          =$theme;
+        		     $itemObject['place']          =$place;
+        		     $itemObject['key']            =$block_key;
+        		     $itemObject['weight']         =$weight;
+        		     $itemObject['author']         =$author;
+        		     $itemObject['code']           =$code;
+        		     $itemObject['active']         =$active == 1 ? true : false;
+        		     $itemObject['comment']        =$comment;
+        		     $itemObject['isnew']          =false;
+        		     $itemObject['isupdate']       =true;
+        		     $itemObject['showtitle']      =$title_show == 1 ? true : false;
+        		     $itemObject['showtitleauto']  =$title_auto == 1 ? true : false;
+        		     
+        		     $stmt->close();
+
+        		  
+        		     
+    	      } 
+    	    $query_additianals="SELECT
+                                  site_blocks_additional.additional_key,
+                                  site_blocks_additional.additional_value
+                                FROM site_blocks_additional
+                                WHERE site_blocks_additional.block_key = ?";
+            
+            if ($stmt = self::$con->prepare($query_additianals)) {
+                $stmt->bind_param("s", $bkey);
+    	        $stmt->execute();
+        		$stmt->bind_result($akey, $avalue); 
+        		while($stmt->fetch()){
+        		  $itemObject[$akey]=$avalue;   
+        		}
+        		$stmt->close();
+            }                    
+    	      
+	        
+	        $result=json_encode($itemObject);
+    	    self::returnData($result); 
+	        
+	    }
+	    
+	}
+?>

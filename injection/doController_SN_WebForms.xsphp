@@ -1,0 +1,30 @@
+<?php
+	class DoController_SN_WebForms extends DoController
+	{
+		function  doAction_listwebforms ($adata){
+			$arrayRoot= array();
+			/*
+			$query = "SELECT au.real_name AS 'name' , au.login_user AS 'user_name', au.enabled , au.activated, ar.role_name AS 'user_group', au.email, au.registration_date, au.user_id    FROM auth_users au    INNER JOIN auth_roles ar INNER JOIN auth_user_role aur  ON au.user_id=aur.user_id AND ar.role_id = aur.role_id";
+			if ($stmt = self::$con->prepare($query)) {
+			    $stmt->execute();
+			    $stmt->bind_result($real_name, $login_user, $enabled, $activated, $role_name, $email, $registration_date, $user_id);
+			    while ($stmt->fetch()) {
+			        $arrayItem = array('name' => $login_user ,
+			                   'user_name' => $real_name ,
+			                   'enabled' => $enabled ,
+			                   'activated' => $activated ,
+			                   'user_group' => $role_name ,
+			                   'email' => $email ,
+			                   'last_visit_date' => '' ,
+			                   'registration_date' =>  $registration_date ,
+			                   'ID' => $user_id );
+			        array_push($arrayRoot, $arrayItem);
+			    }
+			    $stmt->close();
+			}*/
+		$result=json_encode($arrayRoot);
+	    self::returnData($result);
+		}
+		
+	}
+?>

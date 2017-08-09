@@ -1,0 +1,126 @@
+<?php
+    require_once('system/libs/compressor/compressor.php');
+	class DoController  {
+		public static $con  =null;
+		public static $mobj =null;
+		public static $per  =null;
+		public static $json =null;
+		public static $debug=null;
+		public static $jtm  =null;
+		function __construct()
+		{
+		     self::$con   = Registry::get('DBOBJ');
+		     self::$mobj  = Registry::get('MONDBOBJ');
+		     self::$per   = Registry::get('USEROBJ');
+		     self::$debug = $GLOBALS["Debug"];
+		     self::$json  = new Services_JSON;
+		     self::$jtm   = Registry::get('JSONtoMYSQL');
+		}
+		public function returnMessage($message, $type, $header=""){
+		   self::$debug->End();	
+	       Controller::returnMessage($message, $type, $header);
+	    }
+
+	    public function returnData($data){
+	       self::$debug->End();	
+	       Controller::returnData($data);
+
+	    }
+
+	    public function isNotEmpty($variable,&$result,&$eMassage,$eText){
+	    	 $result = true;
+	    	 if($variable == NULL) {$result = false; $eMassage.= $eText." <br>"; }
+	    }
+
+	    public function genGUI(){
+	    	 if (function_exists('com_create_guid')){
+                      return com_create_guid();
+		    }else{
+		        mt_srand((double)microtime()*10000);//optional for php 4.2.0 and up.
+		        $charid = strtoupper(md5(uniqid(rand(), true)));
+		        $hyphen = chr(45);// "-"
+		        $uuid = substr($charid, 0, 8).$hyphen
+			            .substr($charid, 8, 4).$hyphen
+			            .substr($charid,12, 4).$hyphen
+			            .substr($charid,16, 4).$hyphen
+			            .substr($charid,20,12);
+
+		        return $uuid;
+		    }
+	    }
+
+	    public	function getPermissions ($folder){
+		     $perms = fileperms($folder);
+
+            if (($perms & 0xC000) == 0xC000) {
+                // Socket
+                $info = 's';
+            } elseif (($perms & 0xA000) == 0xA000) {
+                // Symbolic Link
+                $info = 'l';
+            } elseif (($perms & 0x8000) == 0x8000) {
+                // Regular
+                $info = '-';
+            } elseif (($perms & 0x6000) == 0x6000) {
+                // Block special
+                $info = 'b';
+            } elseif (($perms & 0x4000) == 0x4000) {
+                // Directory
+                $info = 'd';
+            } elseif (($perms & 0x2000) == 0x2000) {
+                // Character special
+                $info = 'c';
+            } elseif (($perms & 0x1000) == 0x1000) {
+                // FIFO pipe
+                $info = 'p';
+            } else {
+                // Unknown
+                $info = 'u';
+            }
+            
+            // Owner
+            $info .= (($perms & 0x0100) ? 'r' : '-');
+            $info .= (($perms & 0x0080) ? 'w' : '-');
+            $info .= (($perms & 0x0040) ?
+                        (($perms & 0x0800) ? 's' : 'x' ) :
+                        (($perms & 0x0800) ? 'S' : '-'));
+            
+            // Group
+            $info .= (($perms & 0x0020) ? 'r' : '-');
+            $info .= (($perms & 0x0010) ? 'w' : '-');
+            $info .= (($perms & 0x0008) ?
+                        (($perms & 0x0400) ? 's' : 'x' ) :
+                        (($perms & 0x0400) ? 'S' : '-'));
+            
+            // World
+            $info .= (($perms & 0x0004) ? 'r' : '-');
+            $info .= (($perms & 0x0002) ? 'w' : '-');
+            $info .= (($perms & 0x0001) ?
+                        (($perms & 0x0200) ? 't' : 'x' ) :
+                        (($perms & 0x0200) ? 'T' : '-'));
+            
+            return $info;
+		}
+
+	    public function getFolderSize($folder){
+	    	$size =0;
+	    	if(is_dir($folder) ) {
+	    		  if (substr($folder, -1) == '/') {
+		                $folder = substr($folder, 0, -1);
+		              
+		            }
+		             $folder = $_SERVER['DOCUMENT_ROOT'].'/'.$folder;
+
+		              //exec("du -s $folder", $output, $err);
+		              //print_r($output);
+
+			          preg_match('/[\d]+/', $output[0], $matches);
+			          $size=$matches[0] * 1024;
+
+	    	} 
+
+          
+	    	return $size;
+	    }
+	}
+?> 

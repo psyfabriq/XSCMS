@@ -1,0 +1,641 @@
+<?php
+	class DoController_SN_Content extends DoController
+	{
+		function  doAction_listcontents ($adata){
+			$arrayRoot= array();
+			
+			$query = "SELECT
+                      
+                      site_content.content_title,
+                      site_content.content_date,
+                      site_content.content_author,
+                      site_content.content_visible,
+                      site_content.content_address,
+                      site_content.content_node,
+                      site_contenttype.contenttype_name
+                    FROM site_content
+                      LEFT OUTER JOIN site_contenttype
+                    ON site_content.content_type = site_contenttype.contenttype_mashine_name";
+			if ($stmt = self::$con->prepare($query)) {
+			    $stmt->execute();
+			    $stmt->bind_result($title, $date, $author, $public, $address, $node,$content_type);
+			    while ($stmt->fetch()) {
+			        $date=date_create($date);
+			        $arrayItem = array('name'         => $title,
+			                           'date'         => date_format($date,"Y/m/d"),
+			                           'author'       => $author,
+			                           'public'       => $public,
+			                           'address'      => $address,
+			                           'node'         => $node,
+			                           'content_type' => $content_type);
+			        array_push($arrayRoot, $arrayItem);
+			    }
+			    $stmt->close();
+			}
+			
+		$result=json_encode($arrayRoot);
+	    self::returnData($result);
+		}
+		
+		function  doAction_listcontenttypes($adata){
+			$arrayRoot= array();
+			$query = "SELECT contenttype_name, contenttype_mashine_name FROM site_contenttype";
+
+		if ($stmt = self::$con->prepare($query)) {
+		    $stmt->execute();
+		    $stmt->bind_result($contenttype_name, $contenttype_mashine_name);
+		    while ($stmt->fetch()) {
+		        $arrayItem = array(
+		                           'label' => $contenttype_name ,
+				                   'value' => $contenttype_mashine_name 
+                                  );
+			    array_push($arrayRoot, $arrayItem);
+		    }
+		    $stmt->close();
+		} 
+		$result=json_encode($arrayRoot);
+	    self::returnData($result);
+		}
+		
+		function doAction_getcontent ($adata){
+		   $node=$adata['node'];
+		   $arrayItem= array();
+			$query = "SELECT
+                      site_content.content_title,
+                      site_content.content_date,
+                      site_content.content_author,
+                      site_content.content_visible,
+                      site_content.content_tags,
+                      site_content.content_address,
+                      site_content.content_node,
+                      site_content.content_type,
+                      site_contenttype.contenttype_address AS pattern_adr,
+                      site_content.content_is_single,
+                      site_content.content_single_view,
+                      site_contenttype.contenttype_name
+                    FROM site_content
+                      RIGHT OUTER JOIN site_contenttype
+                        ON site_content.content_type = site_contenttype.contenttype_mashine_name
+                    WHERE site_content.content_node = ?";
+
+    		if ($stmt = self::$con->prepare($query)) {
+    		    $stmt->bind_param("s", $node);
+    		    $stmt->execute();
+    		    $stmt->bind_result($title, $date,$author,$public,$tags,$address,$node,$content_type,$pattern_adr,$content_is_single,$content_single_view,$content_type_name);
+    		    while ($stmt->fetch()) {
+    		        
+    		        $arrayItem = array(
+    		                            'name'         => $title ,
+                                        'node'         => $node ,
+                                        'date'         => strtotime($date),
+                                        'type'         => $content_type ,
+                                        'type_name'    => $content_type_name ,
+                                        'author'       => $author,
+                                        'comment'      => $tags ,
+                                        'address'      => $this->constructAdr($pattern_adr, $address),
+                                        'pat_adr'      => $pattern_adr,
+                                        'isNew'        => false,
+                                        'isSingle'     => $content_is_single== 1 ? true : false,
+                                        'singleViewKey'=>$content_single_view,             
+                                        'fields'       =>array()
+                                      );
+    			    
+    		    }
+    		    $stmt->close();
+    		} 
+    		$this->getFields($arrayItem);
+    		$this->getOptions($arrayItem);
+    		$result=json_encode($arrayItem);
+    	    self::returnData($result); 
+		}
+		
+		function getOptions(&$contentTypeObj){
+		    $arrayRoot=array();
+		    if(!empty($contentTypeObj)){
+		             $query = "SELECT
+                              site_contenttype_options_group_default.group_machine_name,
+                              site_contenttype_options_group_default.group_title,
+                              site_contenttype_options_group_default.group_template
+                            FROM site_contenttype_options_group_default";
+                    if ($stmt = self::$con->prepare($query)) {
+                         $stmt->execute();
+                         $stmt->bind_result($group_machine_name,
+                                            $group_title,
+                                            $group_template);
+                         $w=0;                    
+                         while ($stmt->fetch()) {
+                            $arrayItem=array('title' =>$group_title, 'template' =>$group_template, 'mashine_name'=>$group_machine_name,'w'=>$w);
+                            $w++;
+                            $arrayRoot[$group_machine_name]=$arrayItem;
+                         } 
+                         $stmt->close();
+                         $this->getOtionItems($arrayRoot,$contentTypeObj['type'],$contentTypeObj['node']);
+                         $contentTypeObj['options']=$arrayRoot;
+                    }               
+		    }
+		}
+		
+		function getOtionItems(&$Options,$content_type_machine_name,$node){
+		    foreach ($Options as $key => $value) {
+		         $mashine_name=$value['mashine_name'];
+		         $arrayRoot=array();
+		         $query = "SELECT
+                              site_contenttype_options_default.option_title,
+                              site_contenttype_options_default.option_template,
+                              site_contenttype_options_default.option_mashine_name,
+                               CASE WHEN site_contenttype_options_value_default.value IS NULL OR
+                                        site_contenttype_options_value_default.value = '' 
+                                        THEN site_contenttype_options_default.option_template_value 
+								ELSE site_contenttype_options_value_default.value END AS itemValueDefault,
+                              CASE WHEN site_content_options_value_default.value IS NULL OR
+                                  site_content_options_value_default.value = '' THEN CASE WHEN site_contenttype_options_value_default.value IS NULL OR
+                                        site_contenttype_options_value_default.value = '' THEN site_contenttype_options_default.option_template_value ELSE site_contenttype_options_value_default.value END ELSE site_content_options_value_default.value END AS itemValue
+                            FROM site_contenttype_options_default
+                              LEFT OUTER JOIN site_contenttype_options_value_default
+                                ON site_contenttype_options_value_default.contenttype_mashine_name = ?
+                                AND site_contenttype_options_default.option_mashine_name = site_contenttype_options_value_default.option_mashine_name
+                                AND site_contenttype_options_default.group_machine_name = site_contenttype_options_value_default.option_mashine_name_group
+                              LEFT OUTER JOIN site_content_options_value_default
+                                ON site_contenttype_options_default.option_mashine_name = site_content_options_value_default.option_mashine_name
+                                AND site_contenttype_options_default.group_machine_name = site_content_options_value_default.option_mashine_name_group
+                                AND site_content_options_value_default.contenttype_mashine_name = ?
+                                AND site_content_options_value_default.node = ?
+                            WHERE site_contenttype_options_default.group_machine_name = ?";
+                             
+                  if ($stmt = self::$con->prepare($query)) {
+                      $stmt->bind_param("ssss",$content_type_machine_name,$content_type_machine_name,$node,$mashine_name);
+                      $stmt->execute();
+                      $stmt->bind_result($option_title,$option_template,$option_mashine_name,$option_value_default,$option_value);
+                      $w=0;
+                      while ($stmt->fetch()) {
+                            $opv=base64_decode($option_value);
+                           
+                            $arrayItem=array('title' =>$option_title, 'template' =>$option_template, 'mashine_name'=>$option_mashine_name,'w'=>$w );
+                           
+                            if($opv !== 'empty') {
+                                $arrVal=json_decode($opv,true);
+                                if($option_mashine_name=='c_main_views'){
+                                     $opv_default=base64_decode($option_value_default);
+                                     $arrVal_default=json_decode($opv_default,true);
+                                     $arrVal['value']['mainViewsList']=$arrVal_default['value']['mainViewsList'];
+                                }
+                                $w++;
+                                $arrayItem['value'] = $arrVal['value'];
+                                }
+                            $arrayRoot[$option_mashine_name]=$arrayItem;
+                      }                        
+                      $stmt->close();
+                      $Options[$key]['items']=$arrayRoot;
+                  }            
+		    }
+		}
+		
+		function constructAdr($pattern_adr, $adr){
+		   
+		   $result="";
+
+		   $pattern_adr=ltrim(rtrim(trim(str_replace("\\", "/", $pattern_adr)),'/'),'/')."/";
+		   $adr        =ltrim(rtrim(trim(str_replace("\\", "/", $adr)),'/'),'/')."/";
+		   
+		   $len_pattern_adr=strlen($pattern_adr);
+		   $len_adr        =strlen($adr);
+		   
+    	   if($len_pattern_adr<$len_adr){
+    		if( $pattern_adr!=str_replace(substr($adr,$len_pattern_adr),"",$adr)){
+                      $result=$pattern_adr.$adr;
+                    }else{ $result=$adr;}       
+    	   }else{
+    		 $result=$pattern_adr.$adr;      
+    	   }   
+    	   
+
+    	   $result=str_replace('&/','',$result) ;
+    	   $result=str_replace('//','/',$result) ;
+
+           return '/'.ltrim($result,'/');
+		}
+		
+		function getFields(&$contentObj){
+		    $c_type=$contentObj['type'];
+		    $node=$contentObj['node'];
+		    $arrayFields=array();
+		    $query = "SELECT
+                              site_contenttype_fields.title,
+                              site_contenttype_fields.field_type_key,
+                              site_components.tcode,
+                              site_contenttype_fields.ikey,
+                              site_content_value.value,
+                              site_contenttype_fields.options
+                            FROM site_contenttype_fields
+                              LEFT OUTER JOIN site_components
+                                ON site_contenttype_fields.field_type_key = site_components.`key`
+                              LEFT OUTER JOIN site_content_value
+                                ON site_contenttype_fields.ikey = site_content_value.ikey
+                                AND site_content_value.node_id = ?
+                            WHERE site_contenttype_fields.mashine_name = ?";
+
+		    
+		
+		        		if ($stmt = self::$con->prepare($query)) {
+                		    $stmt->bind_param("ss", $node,$c_type);
+                		    $stmt->execute();
+                		    $stmt->bind_result($title,$field_type_key,$tcode,$ikey,$cvalue,$options);
+                		    while ($stmt->fetch()) {
+                		        $arrayItem = array(
+                		                            'ikey'     => $ikey,
+                		                            'title'    => $title ,
+                                                    'type'     => $field_type_key ,
+                                                    'tpl'      => $tcode,
+                                                    'options'  => $options  == null ? array('ikey'=>$ikey) : json_decode(base64_decode($options)),
+                                                    'value'    => $cvalue   == null ? array('ikey'=>$ikey) : json_decode(base64_decode($cvalue))
+                                                  );
+                                                  
+                			     array_push($arrayFields, $arrayItem);
+                		    }
+                		    $stmt->close();
+                		
+		               }
+		               $contentObj['fields']=$arrayFields;
+		}
+		
+		
+		function doAction_setcontent($adata){
+		    $all_query_ok=true;
+		     $d   = new DateTime();
+		      
+		    $contentObj=$adata['content'];
+		    $name   =trim(mysql_escape_string (trim($contentObj['name'])));
+            $node   =trim(mysql_escape_string (trim($contentObj['node'])));
+            
+            $date   =date("Y-m-d", $contentObj['date']);
+            $author =trim(mysql_escape_string (trim($contentObj['author'])));
+            $comment=trim(mysql_escape_string (trim($contentObj['comment'])));
+            $type   =trim(mysql_escape_string (trim($contentObj['type'])));
+            $address=trim(mysql_escape_string (trim($contentObj['address'])));
+            $pattern_adr=trim(mysql_escape_string (trim($contentObj['pat_adr'])));
+            $isnew  =$contentObj['isNew'];
+            $fields =$contentObj['fields'];
+            $options =$contentObj['options'];
+            
+            $isSingle        = trim(mysql_escape_string (trim($contentObj['isSingle']))) == true ? 1 : 0;
+            $singleViewKey   = trim(mysql_escape_string (trim($contentObj['singleViewKey'])));
+            
+            $address =$this->constructAdr($pattern_adr, $address);
+            if($isnew==true){
+                  $q1="INSERT INTO `site_content` (
+                                                   `content_title`,
+                                                   `content_date`, 
+                                                   `content_author`,
+                                                   `content_visible`,
+                                                   `content_tags`, 
+                                                   `content_address`, 
+                                                   `content_node`, 
+                                                   `content_type`,
+                                                   `content_is_single`,
+                                                   `content_single_view`) 
+                                          VALUES (
+                                                   '$name',
+                                                   '$date',
+                                                   'my',
+                                                   '1', 
+                                                   '$comment', 
+                                                   '$address', 
+                                                   '$node', 
+                                                   '$type',
+                                                   '$isSingle',
+                                                   '$singleViewKey');";
+            }
+            elseif($isnew==false){
+                  $q1="UPDATE `site_content` SET `content_title`='$name', 
+                                                 `content_date`='$date',
+                                                 `content_visible`='1', 
+                                                 `content_tags`='$comment', 
+                                                 `content_address`='$address',
+                                                 `content_single_view`='$singleViewKey'
+                                            WHERE `content_node`='$node';";
+            }
+            
+            
+            try {
+            
+                  self::$con->autocommit(FALSE);
+                  self::$con->query($q1) ? null : $all_query_ok=false;
+                  
+            
+                         foreach ($fields as $key => $value) {
+                             
+                            if($all_query_ok===true){ 
+                                
+                              $fikey    =$value['ikey'];
+                              $foptions =base64_encode(json_encode($value['options']));
+                              $ftitle   =$value['title'];
+                              $ftype    =$value['type'];
+                              $fvalue   =base64_encode(json_encode($value['value']));
+                              
+                              $fhash    =md5($fikey."P".$ftype."F".$node."Q");
+                              
+                              $q2="        
+                                          INSERT INTO `site_content_value` (
+                                                                             `ikey`,
+                                                                             `node_id`, 
+                                                                             `field_type`, 
+                                                                             `hash`, 
+                                                                             `value`, 
+                                                                             `meta`)
+                                                                    VALUES (
+                                                                             '$fikey',
+                                                                             '$node',
+                                                                             '$ftype',
+                                                                             '$fhash',
+                                                                             '$fvalue', 
+                                                                             'meta')
+                                                                             ON DUPLICATE KEY UPDATE `value` = '$fvalue';";
+                                                                     
+                                self::$con->query($q2) ? null : $all_query_ok=false;   
+                          } else{self::$con->rollback();}
+                  }
+                  
+
+                  $all_query_ok ? self::$con->commit() : self::$con->rollback();
+				  
+				if ($all_query_ok===false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction', 'Warning');
+					    exit();
+				}
+				elseif( $all_query_ok===true){
+				        self::$con->autocommit(TRUE);
+				        $weight_view=0;
+				        $q_weight_view="SELECT
+                                           CASE WHEN MAX(site_content_main_views_weight.wseight) IS NULL 
+                                                THEN 1 ELSE MAX(site_content_main_views_weight.wseight) END 
+                                           AS weight
+                                        FROM site_content_main_views_weight";
+                                        
+                                        
+                        if ($stmt = self::$con->prepare($q_weight_view)) {
+                		    $stmt->execute();
+                		    $stmt->bind_result($weight_view);
+                		    $stmt->fetch();
+                		    $stmt->close();
+		               }
+		               
+				        self::$con->autocommit(FALSE);
+                            foreach ($options as  $valueGroup) {
+                                
+                                $machine_name_option_group=$valueGroup['mashine_name'];
+                               
+                                foreach ($valueGroup['items'] as $key => $valueOptionItem) {
+                                    
+                                     unset($valueOptionItem['template']);
+                                    
+                                     $machine_name_option_item=$valueOptionItem['mashine_name'];
+                                     
+                                     if($machine_name_option_item!='br'){
+                                         $value_option_item=array('value'=>$valueOptionItem['value']);
+                                         
+                                         if($machine_name_option_item=='c_main_views'){
+                                             
+                                             unset($value_option_item['value']['mainViewsList']);
+                                             $value_option_item['value']['tmp_MainView']="";
+                                             
+                                             $q_main_view_delete="DELETE FROM site_content_main_views WHERE node='$node';";
+                                             self::$con->query($q_main_view_delete) ? null : $all_query_ok=false;
+                                             $q_main_view_weight_delete="DELETE FROM site_content_main_views_weight WHERE view_ikey NOT IN (SELECT site_content_main_views.view_ikey FROM site_content_main_views );";
+                                             self::$con->query($q_main_view_weight_delete) ? null : $all_query_ok=false;
+  
+                                             foreach($value_option_item['value']['mainViewsSelect'] as $key_v => $viewObj){
+                                                 $v_ikey=$viewObj['ikey'];
+                                                 $v_hash_weight=md5('P'.$type.'F'.$v_ikey.'Q');
+                                                 $v_hash=md5('P'.$type.'F'.$v_ikey.'Q'.$node);
+                                                 $weight_view++;
+                                                 $q_main_view_weight="INSERT IGNORE INTO `site_content_main_views_weight` (
+                                                                                                             `content_type`,
+                                                                                                             `view_ikey`,
+                                                                                                             `hash`, 
+                                                                                                             `wseight`
+                                                                                                          )
+                                                                                                    VALUES (
+                                                                                                             '$type',
+                                                                                                             '$v_ikey',
+                                                                                                             '$v_hash_weight',
+                                                                                                             '$weight_view'
+                                                                                                           );";
+                                                  $q_main_view="INSERT IGNORE INTO `site_content_main_views` (
+                                                                                                             `node`,
+                                                                                                             `content_type`,
+                                                                                                             `view_ikey`, 
+                                                                                                             `hash`
+                                                                                                          )
+                                                                                                    VALUES (
+                                                                                                             '$node',
+                                                                                                             '$type',
+                                                                                                             '$v_ikey',
+                                                                                                             '$v_hash'
+                                                                                                           );";
+                                                  self::$con->query($q_main_view) ? null : $all_query_ok=false;
+                                                  self::$con->query($q_main_view_weight) ? null : $all_query_ok=false;
+                                             }
+                                             
+                                         }
+                                         $data=$value_option_item;
+                                         $type_data=gettype($data['value']);
+                                         $json_base64_value_option=base64_encode(json_encode($data));
+                                         $md_hash_option  =md5('P'.$machine_name_option.'F'.$machine_name_option_item.'Q'.$type.$node);
+                                         $q_option="INSERT INTO `site_content_options_value_default` (
+                                                                                                             `contenttype_mashine_name`,
+                                                                                                             `option_mashine_name_group`,
+                                                                                                             `option_mashine_name`, 
+                                                                                                             `node`,
+                                                                                                             `value_type`,
+                                                                                                             `value`, 
+                                                                                                             `hash`)
+                                                                                                    VALUES (
+                                                                                                             '$type',
+                                                                                                             '$machine_name_option_group',
+                                                                                                             '$machine_name_option_item',
+                                                                                                             '$node',
+                                                                                                             '$type_data',
+                                                                                                             '$json_base64_value_option', 
+                                                                                                             '$md_hash_option')
+                                                                                                             ON DUPLICATE KEY UPDATE `value` = '$json_base64_value_option';";
+                                                                                                             
+                                       
+                                        self::$con->query($q_option) ? null : $all_query_ok=false;
+                                    }
+                                }
+                            }
+                            
+                            $all_query_ok ? self::$con->commit() : self::$con->rollback();
+				  
+            				if ($all_query_ok===false) {
+            				    	    self::$con->close();
+            					    self::returnMessage('Option Failed to commit the transaction', 'Warning');
+            					    exit();
+            				}
+                         
+                       }
+				
+				
+				    self::$con->close();
+				    self::returnMessage('Success!', 'Success');
+            }
+            catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+			}
+				
+		}
+		
+		function doAction_listviewsmain ($adata){
+    		    $arrayRoot= array();
+    			
+    			$query = "SELECT
+                          site_contenttype_view.title AS title,
+                          site_contenttype.contenttype_name AS content_type_name,
+                          site_content_main_views_weight.view_ikey AS view_key,
+                          site_content_main_views_weight.wseight AS weight,
+                          site_content_main_views_weight.`show`
+                        FROM site_content_main_views_weight
+                          LEFT OUTER JOIN site_contenttype_view
+                            ON site_content_main_views_weight.view_ikey = site_contenttype_view.`key`
+                          LEFT OUTER JOIN site_contenttype
+                            ON site_content_main_views_weight.content_type = site_contenttype.contenttype_mashine_name";
+    			if ($stmt = self::$con->prepare($query)) {
+    			    $stmt->execute();
+    			    $stmt->bind_result($title, $content_type_name, $view_key, $weight, $show);
+    			    while ($stmt->fetch()) {
+    			        $arrayItem = array('name'         => $title,
+    			                           'content_type' => $content_type_name,
+    			                           'view_key'     => $view_key,
+    			                           'weight'       => $weight,
+    			                           'show'         => $show == 1 ? true : false
+    			                           );
+    			        array_push($arrayRoot, $arrayItem);
+    			    }
+    			    $stmt->close();
+    			}
+    			
+    		$result=json_encode($arrayRoot);
+    	    self::returnData($result);
+		}
+		
+		function  doAction_deletecontent ($adata){
+		        $all_query_ok=true;
+		        $node=trim(mysql_escape_string (trim($adata['node'])));
+		        $q1="DELETE FROM `site_content` WHERE `content_node`='$node';";
+		        $q2="DELETE FROM `site_content_value` WHERE `node_id`='$node';";
+		        try {
+		                self::$con->autocommit(FALSE);
+		                self::$con->query($q2) ? null : $all_query_ok=false;
+		                if( $all_query_ok==true){self::$con->query($q1) ? null : $all_query_ok=false;}
+		                else{self::$con->rollback();}
+		                $all_query_ok ? self::$con->commit() : self::$con->rollback();
+		                if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction', 'Warning');
+					    exit();
+        				}
+        				    self::$con->close();
+        				    self::returnMessage('Success!', 'Success');
+		                
+		        }
+                catch (Exception $e) {
+    				    self::$con->rollback();
+    				    self::$con->close();
+    				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+    				    exit();
+    			}
+		      
+		}
+		
+		function doAction_getnewcontent ($adata){
+		     $contentObj=$adata['contentobj'];
+		     $this->getContentTypeAdr($contentObj);
+		     $this->getFields($contentObj);
+		     $this->getOptions($contentObj);
+		     $this->checkifsinglepage($contentObj);
+		     $result=json_encode($contentObj);
+    	     self::returnData($result); 
+		}
+		
+		
+		function getContentTypeAdr(&$contentObj){
+		    $c_type=$contentObj['type']; 
+		    $q="SELECT
+                  site_contenttype.contenttype_address,
+                  site_contenttype.contenttype_name
+                FROM site_contenttype
+                WHERE site_contenttype.contenttype_mashine_name = ?";
+                if ($stmt = self::$con->prepare($q)) {
+                  $stmt->bind_param( "s" ,$c_type);
+                  $stmt->execute();
+                  $stmt->bind_result($pattern_adr,$content_type_name);
+                  $stmt->fetch();
+                  if(!empty($pattern_adr)){
+                      $contentObj['pat_adr']  = $pattern_adr;
+                      $contentObj['address']  = $this->constructAdr($pattern_adr, '');
+                      $contentObj['date']     = time();
+                      $contentObj['type_name']= $content_type_name;
+                  }
+                  $stmt->close();
+                }
+		    
+		}
+		function checkifsinglepage(&$contentObj){
+		     $c_type=$contentObj['type']; 
+		     $res=FALSE;
+             $q="SELECT
+                  site_contenttype_view.is_this_single
+                FROM site_contenttype_view
+                WHERE site_contenttype_view.mashine_name = ?
+                AND site_contenttype_view.is_this_single = 1
+                GROUP BY site_contenttype_view.is_this_single";
+    
+              if ($stmt = self::$con->prepare($q)) {
+                  $stmt->bind_param( "s" ,$c_type);
+                  $stmt->execute();
+                  $stmt->bind_result($is_this_single);
+                  while ($stmt->fetch()) {
+                    $res=TRUE;
+                    break;
+                  }
+                  $stmt->close();
+            }
+            
+            $contentObj['isSingle']=$res;
+            
+		}
+		
+		function doAction_listsinglepageviews($adata){
+		    $c_type=$adata['type']; 
+	    	$arrayRoot= array();
+    			$query = "SELECT
+                          site_contenttype_view.title,
+                          site_contenttype_view.`key`
+                        FROM site_contenttype_view
+                        WHERE site_contenttype_view.mashine_name = ?
+                        AND site_contenttype_view.is_this_block = 0
+                        AND site_contenttype_view.is_this_list = 0";
+    
+    		if ($stmt = self::$con->prepare($query)) {
+    		    $stmt->bind_param( "s" ,$c_type);
+    		    $stmt->execute();
+    		    $stmt->bind_result($view_name, $view_key);
+    		    while ($stmt->fetch()) {
+    		        $arrayItem = array(
+    		                           'label' => $view_name ,
+    				                   'value' => $view_key 
+                                      );
+    			    array_push($arrayRoot, $arrayItem);
+    		    }
+    		    $stmt->close();
+    		} 
+    		$result=json_encode($arrayRoot);
+    	    self::returnData($result);
+		}
+		
+	}
+?>

@@ -1,0 +1,71 @@
+<?php
+	class DoController_SN_Logs extends DoController
+	{
+	    function doAction_getlogs($adata){
+	        $arrayRoot = array();
+	        $logsFolder = substr(Registry::get('Logs',null,true), 0, -1).'/';
+	        $files = array_diff( scandir( $logsFolder ), Array( ".", ".." ) );
+	         foreach( $files as $d ) {
+	              if(is_file($logsFolder.$d)){
+                        $arrayItem = array( 
+                                                'name'       => basename($d),
+                                                //'rights'     => self::getPermissions($logsFolder.$d),
+                                                'size'       => filesize($logsFolder.$d),
+                                                'time'       => date ("Y-m-d H:i:s", filemtime($logsFolder.$d)),
+                                                //'type'       => 'file',
+                                                //'isimage'    => exif_imagetype($logsFolder.$d) ? true : false,
+                                                'url'        => '../'.$logsFolder.$d
+                                              );
+                             array_push($arrayRoot,$arrayItem);
+                    }
+	         }
+	        
+	        self::returnData(json_encode($arrayRoot));
+	    }
+	    
+	    function doAction_test($adata){
+	        
+	       $GLOBALS["Debug"]->AddMessage('l'.__LINE__, get_class($this).' on line '.__LINE__ );
+           $GLOBALS["Debug"]->AddMessage('test', 'TEST');
+           $GLOBALS["Debug"]->End(true);
+		    
+	        self::returnMessage('OK','Success');
+	    }
+	    
+	    function doAction_getlog($adata){
+	        $fname=$adata["fname"];
+	        $logsFolder = substr(Registry::get('Logs',null,true), 0, -1).'/';
+	        $d='';
+	        $file_code=base64_encode(file_get_contents('./'.$logsFolder.$fname));
+	        self::returnData(json_encode(array('result'=> $file_code)));
+	    }
+	    
+	    function doAction_removeAllLog($adata){
+	        $logsFolder = substr(Registry::get('Logs',null,true), 0, -1).'/';
+	        $files = array_diff( scandir( $logsFolder ), Array( ".", ".." ) );
+	        foreach( $files as $d ) {
+	            try {
+	                $r=$logsFolder.$d;
+	                unlink($r);
+	            } catch (Exception $e ) {
+	                self::returnMessage('Error : '.$e, 'Warning');
+	            }
+	           
+	        }
+	        self::returnMessage('Success! remove all logs :)',$r, 'Success');
+	        
+	    }
+	    
+	    function doAction_removeLog($adata){
+	       $sLog= $adata['fname']; 
+	       $logsFile = substr(Registry::get('Logs',null,true), 0, -1).'/'.$sLog;
+	       try {
+	            unlink($logsFile);
+	            self::returnMessage('Success! remove log '.$sLog.' :)', 'Success');
+	       } catch (Exception $e) {
+	           self::returnMessage('Error : '.$e, 'Warning');
+	       }
+	      
+	    }
+	    
+	}?>

@@ -1,0 +1,249 @@
+<?php
+class DoController_SN_AdmRoles extends DoController
+{
+	function  doAction_listroles($adata){
+		$arrayRoot= array();
+		$query = "SELECT
+		auth_roles.role_name,
+		COUNT(auth_user_role.user_id) AS 'count',
+		auth_roles.role_id
+		FROM auth_roles
+		LEFT OUTER JOIN auth_user_role
+		ON auth_roles.role_id = auth_user_role.role_id
+		WHERE auth_roles.role_show <> 0
+		GROUP BY auth_roles.role_id";
+		if ($stmt = self::$con->prepare($query)) {
+			$stmt->execute();
+			$stmt->bind_result($role_name, $count, $role_id);
+			while ($stmt->fetch()) {
+				$arrayItem = array('group_title' => $role_name ,
+					'count_sers' => $count ,
+					'ID' => $role_id );
+				array_push($arrayRoot, $arrayItem);
+			}
+			$stmt->close();
+		}
+		$result=json_encode($arrayRoot);
+		self::returnData($result);
+	}
+    function doAction_saverolesvalues($adata){
+        $all_query_ok=true;
+        $ArrayRoleAccess = array();
+        $roleName           =$adata['conteiner']['name'];
+        $roleID                 =$adata['conteiner']['id'];
+        $roleIsNew           =$adata['conteiner']['isnew'];
+        $roleControllersG =$adata['conteiner']['controllers'];
+
+        if($roleIsNew===false){ $q1="UPDATE auth_roles SET `role_name`='$roleName' WHERE `role_id`='$roleID';";}
+        elseif ($roleIsNew===true) {$q1="INSERT INTO auth_roles (`role_name`, `role_show`, `role_system`) VALUES ('$roleName ', '1', '0');";}
+
+       try {
+        self::$con->query($q1) ? null : $all_query_ok=false;
+        if($roleIsNew===true&&$all_query_ok==true){
+          $roleID =self::$con->insert_id;
+        }
+        self::$con->autocommit(FALSE);
+
+        if($all_query_ok<>false){
+
+           foreach ($roleControllersG as $group) {
+            foreach ($group['controllers'] as $controller) {
+
+                if($controller['update']===true&&$all_query_ok<>false){
+                  $name             =$controller['name'];
+                  $hash              =$controller['hashid'];
+                  $permasccess=$controller['access'];
+                  $q2="UPDATE auth_permissions SET `perm_desc`='$name' WHERE `perm_hash`='$hash';";
+                  self::$con->query($q2) ? null : $all_query_ok=false;
+                  $were_error='auth_permissions controller '.$name;
+                  if($all_query_ok===true){
+                    $arrayItemAccess= array('hash' => $hash,'access' => $permasccess, 'roleid'=>$roleID);
+                    array_push($ArrayRoleAccess, $arrayItemAccess);
+                  }
+                }
+                foreach ($controller['actions'] as $action) {
+                  if($action['update']===true&&$all_query_ok<>false){
+                    $name=$action['name'];
+                    $hash=$action['hashid'];
+                    $permasccess=$controller['access'];
+                    $q3="UPDATE auth_permissions SET `perm_desc`='$name' WHERE `perm_hash`='$hash';";
+                     self::$con->query($q3) ? null : $all_query_ok=false;
+                     $were_error='auth_permissions action '.$name;
+                     if($all_query_ok===true){
+                       $arrayItemAccess= array('hash' => $hash,'access' => $permasccess, 'roleid'=>$roleID);
+                       array_push($ArrayRoleAccess, $arrayItemAccess);
+                      }
+                  }
+                }
+            }
+          }
+        }
+
+       $all_query_ok ? self::$con->commit() : self::$con->rollback();
+
+            if($all_query_ok==true){
+              $this->RoleAccessToPermission($ArrayRoleAccess);
+               self::$con->close();
+            }
+            elseif ($all_query_ok==false) {
+              //self::$con->close();
+              self::returnMessage('Failed to commit the transaction (insert)==>> '.$were_error, 'Warning');
+              exit();
+             }
+
+            self::returnMessage('Success! update Role and Permissions  ', 'Success');
+
+       } catch (Exception $e){
+            self::$con->rollback();
+            self::$con->close();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit();
+       }
+
+
+    }
+    protected function RoleAccessToPermission($arrayItems){
+      $all_query_ok=true;
+      $arrayQuery=array();
+      foreach ($arrayItems as $key => $value) {
+        $hash=$value['hash'];
+        $roleid=$value['roleid'];
+        $id=$this->hasAccess($value['hash'],$value['roleid']);
+        if($arrayItems[$key]['access']===true){
+          if($id<>0){
+             $q="UPDATE auth_role_perm SET `value`='1' WHERE `id`='$id';";
+             array_push($arrayQuery, $q);
+          }else{
+             $mysqltime = date('Y-m-d H:i:s');
+             $id=$this->getIDPermissionByHash($hash);
+             $q="INSERT INTO auth_role_perm (`role_id`, `perm_id`, `value`, `add_date`) VALUES ('$roleid', '$id', '1', ' $mysqltime');";
+             array_push($arrayQuery, $q);
+          }
+        }elseif($id<>0){
+           $q="DELETE FROM auth_role_perm WHERE `id`='$id';";
+           array_push($arrayQuery, $q);
+        }
+      }
+
+      try{
+        self::$con->autocommit(FALSE);
+        foreach ($arrayQuery as  $qv) {
+           if($all_query_ok==true){
+            self::$con->query($qv) ? null : $all_query_ok=false;
+           }
+        }
+
+       $all_query_ok ? self::$con->commit() : self::$con->rollback();
+
+      }catch (Exception $e){
+            self::$con->rollback();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit();
+       }
+        self::$con->close();
+    }
+     function getIDPermissionByHash($hash){
+      $query = "SELECT   perm_id FROM auth_permissions WHERE auth_permissions.perm_hash = ?";
+          if ($stmt = self::$con->prepare($query)) {
+              $stmt->bind_param("s", $hash);
+              $stmt->execute();
+              $stmt->bind_result($perm_id);
+              $stmt->fetch();
+              $stmt->close();
+              return $perm_id;
+          }
+          return '';
+     }
+     function hasAccess($hash,$role_id){
+      $rpid=0;
+      $query = "SELECT   id FROM auth_role_perm
+                      LEFT OUTER JOIN auth_permissions
+                      ON auth_role_perm.perm_id = auth_permissions.perm_id
+                      WHERE auth_permissions.perm_hash = '$hash' AND auth_role_perm.role_id = '$role_id' ";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->execute();
+            $stmt->bind_result($id);
+             while ($stmt->fetch()) {
+                  $rpid=$id;
+              }
+            $stmt->close();
+        }
+      return $rpid;
+    }
+
+	function doAction_getpermissions($adata){
+	    $arrayRoot= array(); //array conrolles
+	    $arrayTemp= array();
+	    $r_id=$adata['role_id'];
+	    $query = "SELECT perm_group,perm_name FROM adm_permissions_group";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->execute();
+            $stmt->bind_result($permg,$title);
+            while ($stmt->fetch()) {
+                array_push($arrayTemp,array('id' => $permg, 'name' => $title));
+            }
+            $stmt->close();
+        }
+
+	    foreach ($arrayTemp as $nameGC) {
+	        $arrayControllers = array();
+	        $arrayPrepare = $this->getObjectsPermissions($nameGC['id']); //array conrolles (prepare)
+	        foreach ($arrayPrepare as $objectController) {
+	            $permission=$this->getPermission($objectController['id'],$r_id);
+	            $arrayActions=array();
+
+	            $actions=$this->getObjectsPermissions($objectController['key']);
+	            foreach ($actions as $objectAction){
+	                $permission_action=$this->getPermission($objectAction['id'],$r_id);
+	                $objectAction['access']=$permission_action;
+	                unset($objectAction['key']);
+	                unset($objectAction['id']);
+	                array_push($arrayActions,$objectAction);
+	            }
+
+	            $objectController['access']=$permission;
+	            $objectController['actions']=$arrayActions;
+	            unset($objectController['key']);
+	            unset($objectController['id']);
+	            array_push($arrayControllers,$objectController);
+	        }
+
+	        array_push($arrayRoot,array('name' =>$nameGC['name'] ,'controllers' => $arrayControllers, ));
+	    }
+
+	    $result=json_encode($arrayRoot);
+		self::returnData($result);
+	}
+
+    function getObjectsPermissions($perm_parent){
+       $arrayRoot=array();
+       $query = "SELECT perm_key,perm_desc,perm_hash, perm_id FROM auth_permissions WHERE auth_permissions.perm_parent = ?";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s", $perm_parent);
+            $stmt->execute();
+            $stmt->bind_result($perm_key, $perm_desc, $perm_hash, $perm_id);
+            while ($stmt->fetch()) {
+                array_push($arrayRoot,array('name' => $perm_desc ,'hashid' => $perm_hash,'key' => $perm_key, 'id' => $perm_id, 'update' => false,));
+            }
+            $stmt->close();
+        }
+        return $arrayRoot;
+   }
+
+    function getPermission($perm_id,$role_id){
+        $result=false;
+        $query = "SELECT value FROM auth_role_perm WHERE auth_role_perm.role_id = ? AND auth_role_perm.perm_id = ?";
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("ss", $role_id,$perm_id);
+            $stmt->execute();
+            $stmt->bind_result($value);
+            $stmt->fetch();
+            $value ? $result=true : $result=false;
+            $stmt->close();
+        }
+       return $result;
+   }
+}?>

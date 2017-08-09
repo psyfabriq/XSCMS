@@ -1,0 +1,22 @@
+[
+   {
+     "name": "XSCMS Admin",
+     "type": "admin",
+     "path": "templates/admin/adm-template.tpl"
+   },
+   {
+     "name": "XSCMS Site",
+     "type": "site",
+     "path": "templates/site/site-template.tpl"
+   },
+   {
+     "name": "XSCMS Authorization",
+     "type": "auth",
+     "path": "templates/system/auth-template.tpl"
+   },
+   {
+     "name": "XSCMS 404",
+     "type": "404",
+     "path": "templates/system/404-template.tpl"
+   }
+]

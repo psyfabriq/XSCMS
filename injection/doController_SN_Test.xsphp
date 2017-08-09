@@ -1,0 +1,52 @@
+<?php
+	class DoController_SN_Test extends DoController
+	{
+	    function doAction_test ($data){
+	        /*
+	        $server = "mongodb://sedsystem:ermak9056@10.0.10.4:27017/sedsystem";
+	        $c = new MongoClient($server);
+	        
+            if($c->connected){
+                echo "Connected successfully";
+                $seedData = array(
+                    array(
+                        'decade' => '1970s', 
+                        'artist' => 'Debby Boone',
+                        'song' => 'You Light Up My Life', 
+                        'weeksAtOne' => 10
+                    ),
+                    array(
+                        'decade' => '1980s', 
+                        'artist' => 'Olivia Newton-John',
+                        'song' => 'Physical', 
+                        'weeksAtOne' => 10
+                    ),
+                    array(
+                        'decade' => '1990s', 
+                        'artist' => 'Mariah Carey',
+                        'song' => 'One Sweet Day', 
+                        'weeksAtOne' => 16
+                    ),
+                );
+                */
+               $db=parent::$mobj['obj'];
+               $faq = $db->faq;
+               
+                $ret = $faq->remove();
+ 
+                 var_dump($ret);
+               
+              // $query = array('weeksAtOne' => array('$gte' => 10));
+             //  $cursor = $faq->find($query)->sort(array('decade' => 1));
+               
+              // foreach($cursor as $doc) {
+              //      var_dump($doc);
+              // }
+               // $db = $c->selectDB("sedsystem");
+               // $faq = $db->faq;
+               // $faq->batchInsert($seedData);
+                
+
+	    }
+	      
+	}?>

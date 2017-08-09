@@ -1,0 +1,87 @@
+[
+    {
+        "name": "XSCMS Admin",
+        "type": "admin",
+        "version": "1.0 a",
+        "description": "Administration theme",
+        "file": "adm-template.tpl",
+        "screenshot": "screenshot.png",
+        "blocks":[
+                           
+                           {
+                             "name": "Left sidebar",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-leftsidebar.tpl"
+                           },
+                           {
+                             "name": "Right sidebar",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-rightsidebar.tpl"
+                           },
+                           {
+                             "name": "Top bar",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-topbar.tpl"
+                           },
+                           {
+                             "name": "Footer bar",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-footerbar.tpl"
+                           },
+                           {
+                             "name": "Body prefix",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-bodyprefix.tpl"
+                           },
+                           {
+                             "name": "Body postfix",
+                             "version": "1.0 a",
+                             "description": "Administration theme",
+                             "file": "adm-block-bodypostfix.tpl"
+                           }
+
+                        ],
+        "poligons":[
+                           {
+                             "name": "Right sidebar home",
+                             "mashinename":"right_sidebar_home",
+                             "description":"Right SideBar Home"
+                           },
+                           {
+                             "name": "Right sidebar Settings",
+                             "mashinename":"right_sidebar_settings",
+                             "description":"Right SideBar Settings"
+                           },
+                           {
+                             "name": "Left sidebar",
+                             "mashinename":"left_sidebar",
+                             "description":"Left SideBar"
+                           },
+                           {
+                             "name": "Top bar",
+                             "mashinename":"top_bar",
+                             "description":"Top Bar"
+                           },
+                           {
+                             "name": "Footer bar",
+                             "mashinename":"footer_bar",
+                             "description":"Footer Bar"
+                           },
+                           {
+                             "name": "Body prefix",
+                             "mashinename":"body_prefix",
+                             "description":"Body Prefix"
+                           },
+                           {
+                             "name": "Body postfix",
+                             "mashinename":"body_postfix",
+                             "description":"Body Postfix"
+                           }
+                        ]                
+    }
+]

@@ -1,0 +1,69 @@
+<?php
+class DoController_SN_Faq extends DoController
+{
+    function doAction_getfaq($adata){
+             $query = "SELECT title AS title,
+			                  config_type AS systemname
+			          FROM adm_config ORDER BY data_key";
+			 $db=parent::$mobj['obj'];
+             $faq = $db->faq;         
+
+			if ($stmt = self::$con->prepare($query)) {
+
+			    $stmt->execute();
+			    $stmt->bind_result($title, $systemname);
+			    $listconstructions=array();
+			    
+			    while ($stmt->fetch()) {
+			        
+                                        
+			    	$item= array( 'name' => "$title", 'data_key' => "$systemname" , 'type'=>'group', 'select'=>false, 'update'=>false,  'value'=>'',  'categories'=> []);
+			    	
+			    	$cursor=$faq->findOne(array('data_key' => $systemname));
+			    	//var_dump($cursor);
+                     if(!empty($cursor)){
+                        $item['value']  =$cursor['value']; 
+                        $item['categories']=$cursor['categories'];
+                     }
+			    	
+			        array_push($listconstructions, $item);
+			    }
+			    $stmt->close();
+			    $listconstructions=json_encode($listconstructions);
+			    self::returnData($listconstructions);
+			}
+			
+    }
+    
+
+    
+    function doAction_setfaq($adata){
+        $gobj=$adata['gobj'];
+        
+        $db=parent::$mobj['obj'];
+        $faq = $db->faq;
+        
+         foreach($gobj as $doc) {
+             if($doc['update']===true){
+                 unset($doc['update']);
+                 unset($doc['select']);
+                 if(!empty($faq->findOne(array('data_key' => $doc['data_key'])))){
+                     $newdata = array('$set' => $doc);
+                     $faq->update(array('data_key' => $doc['data_key']), $newdata);
+                 }
+                 else{
+                     $faq->batchInsert(array($doc));
+                 }
+                        
+             }
+    
+         }
+         
+       $cursor = $faq->find();
+        foreach ( $cursor as $id => $value )
+        {
+            echo "$id: ";
+            var_dump( $value );
+        }
+    }
+}?>

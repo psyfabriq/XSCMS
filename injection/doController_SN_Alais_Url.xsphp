@@ -1,0 +1,97 @@
+<?php
+class DoController_SN_Alais_Url extends DoController
+{
+    function doAction_listalises($adata){
+        $arrayRoot= array();
+        $query = "SELECT site_alias AS alias, site_alias_address AS address, site_alias_title AS title, id_alias FROM site_alias";
+
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->execute();
+            $stmt->bind_result($alias, $address, $title, $id);
+            while ($stmt->fetch()) {
+                $arrayItem = array('alias_title' => $title ,
+				                   'url' => $address ,
+					               'alias_url' => $alias,'ID' => $id );
+				array_push($arrayRoot, $arrayItem);
+            }
+            $stmt->close();
+        }
+        
+        $result=json_encode($arrayRoot);
+		self::returnData($result);
+                
+    }
+    
+    function doAction_getaliasbyid($adata){
+        $arrayRoot= array();
+        $a_id=$adata['alias_id'];
+        
+        $query = "SELECT site_alias AS alias, site_alias_address AS address, site_alias_title AS title FROM site_alias WHERE site_alias.id_alias = ?";
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s",$a_id);
+            $stmt->execute();
+            $stmt->bind_result($alias,$address,$title);
+            $stmt->fetch();
+            $arrayRoot=array('alias' => $alias ,'address' => $address,'title' => $title);
+            $stmt->close();
+        }
+        $result=json_encode($arrayRoot);
+		self::returnData($result);
+    }
+    function doAction_deletealias ($adata){
+         $all_query_ok=true;
+         $aliasobj =$adata['aliasobj'];
+         $id=trim(mysql_escape_string (trim($aliasobj['id'])));
+         $qd1="DELETE FROM site_alias WHERE `id_alias`='$id' ";
+         try {
+            self::$con->autocommit(FALSE);
+            self::$con->query($qd1) ? null : $all_query_ok=false;
+             
+            $all_query_ok ? self::$con->commit() : self::$con->rollback();
+              if ($all_query_ok==false) {
+                self::$con->close();
+                self::returnMessage('Failed to commit the transaction ', 'Warning');
+                exit();
+              }
+              self::returnMessage('Delete Success !!!', 'Success'); 
+             
+        }  catch (Exception $e){
+            self::$con->rollback();
+            self::$con->close();
+            self::returnMessage('Error : ( '.$e.' )', 'Warning');
+            exit();
+       }
+         
+    }
+    
+    function doAction_savechangesalias ($adata){
+         $valid=false;
+         $aliasobj =$adata['aliasobj'];
+         $aliasdata=$aliasobj['alias'];
+            $site_alias        =trim(mysql_escape_string (trim($aliasdata['alias'])));
+            $site_alias_address=trim(mysql_escape_string (trim($aliasdata['address'])));
+            $site_alias_title  =trim(mysql_escape_string (trim($aliasdata['title'])));
+            
+         if($aliasobj['isnew']==true){
+            $q1="INSERT INTO site_alias (`site_alias`, `site_alias_address`, `site_alias_title`) VALUES ('$site_alias', '$site_alias_address', '$site_alias_title');";
+            $valid=true;
+         }elseif ($aliasobj['isnew']==false) {
+            $id=trim(mysql_escape_string (trim($aliasobj['id'])));
+            $q1="UPDATE site_alias SET `site_alias`='$site_alias', `site_alias_address`='$site_alias_address', `site_alias_title`='$site_alias_title' WHERE `id_alias`='$id';";
+            $valid=true;
+         }
+         
+         try {
+            self::$con->query($q1) ? null : $valid=false;
+            if($aliasobj['isnew']==true&&$valid==true){
+              $aliasID =self::$con->insert_id;
+               self::returnMessage('INSERT ->'.$aliasdata['title'].' whith id ->'.$aliasID, 'Success');
+            }elseif($valid==true){
+               self::returnMessage('UPDATE ->'.$aliasdata['title'], 'Success');
+            }else{
+               self::returnMessage('Failed this operation ;( ', 'Warning');
+            }
+        }
+        catch (Exception $e){self::returnMessage('Error : ( '.$e.' )', 'Warning');}
+    }
+}?>

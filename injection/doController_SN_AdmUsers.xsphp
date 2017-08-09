@@ -1,0 +1,319 @@
+<?php
+	class DoController_SN_AdmUsers extends DoController
+	{
+		function  doAction_listusers($adata){
+			$arrayRoot= array();
+			$query = "SELECT au.real_name AS 'name' ,
+						au.login_user AS 'user_name',
+						 au.enabled , au.activated,
+						 GROUP_CONCAT(ar.role_name SEPARATOR '|') AS 'user_group',
+						 au.email, au.registration_date,
+						 au.user_id
+						 FROM auth_users au
+						 INNER JOIN auth_roles ar
+						 INNER JOIN auth_user_role aur
+						 ON au.user_id=aur.user_id
+						 AND ar.role_id = aur.role_id
+						 GROUP BY au.user_id
+						";
+			if ($stmt = self::$con->prepare($query)) {
+			    $stmt->execute();
+			    $stmt->bind_result($real_name, $login_user, $enabled, $activated, $role_name, $email, $registration_date, $user_id);
+			    while ($stmt->fetch()) {
+			        $arrayItem = array('name' => $login_user ,
+			                   'user_name' => $real_name ,
+			                   'enabled' => $enabled ,
+			                   'activated' => $activated ,
+			                   'user_group' => $role_name ,
+			                   'email' => $email ,
+			                   'last_visit_date' => '' ,
+			                   'registration_date' =>  $registration_date ,
+			                   'ID' => $user_id );
+			        array_push($arrayRoot, $arrayItem);
+			    }
+			    $stmt->close();
+			}
+		$result=json_encode($arrayRoot);
+	    self::returnData($result);
+		}
+		
+		function doAction_setuser($adata){
+		    $all_query_ok=true;
+		    $valid=true;
+		    $eMessage="<br>";
+		    $usrObj=$adata['usrob'];
+		    
+		    $login     =trim(mysql_escape_string (trim($usrObj['login'])));
+		    $login_old =trim(mysql_escape_string (trim($usrObj['old'])));
+		    $password  =trim(mysql_escape_string (trim($usrObj['password'])));
+		    $uname     =trim(mysql_escape_string (trim($usrObj['username'])));
+		    $email     =trim(mysql_escape_string (trim($usrObj['email'])));
+		    $uGroups   =trim(mysql_escape_string (trim($usrObj['usergroups'])));
+		    $isEnable  =trim(mysql_escape_string (trim($usrObj['enable']))) == true ? 1 : 0;
+		    $isActive  =trim(mysql_escape_string (trim($usrObj['active']))) == true ? 1 : 0;
+		    
+		     try {
+		         
+        		    if($usrObj['isNew']==true){
+        		    
+        		       $this->checkIsUser($login,$valid,true,$eMessage,$uid);
+        		       $this->checkValidFields($usrObj,$valid,true,$eMessage);
+        		       
+        		       $q1="INSERT INTO auth_users (`user_id`, `login_user`, `passwd_user`, `real_name`, `enabled`, `activated`, `registration_date`, `email`)
+        		                            VALUES ('$uid', '$login', '$password', '$uname', '$isEnable', '$isActive', '0001-01-01 00:00:00' , '$email');"; 
+        		       
+        		    }elseif ($usrObj['isNew']==false) {
+        		        
+        		       $this->checkIsUser($login_old,$valid,false,$eMessage,$uid);
+        		       $this->checkValidFields($usrObj,$valid,false,$eMessage);
+        		        
+        		       $q1="UPDATE auth_users SET  `passwd_user`='$password', `real_name`='$uname', `enabled`='$isEnable', `activated`='$isActive',  `email`='$email' WHERE `login_user`='$login_old';";
+        		    }
+        		    
+        		    if ($valid===true){
+        		        self::$con->autocommit(FALSE);
+        		        
+            		    self::$con->query($q1) ? null : $all_query_ok=false;
+            		    
+            		    $usrObj['isNew'] ? NULL : $this->delUserGroups($uid,$all_query_ok);
+            		    $this->setUserGroups($uid,$usrObj['usergroups'],$all_query_ok);
+            		    
+            		    $all_query_ok ? self::$con->commit() : self::$con->rollback();
+            		    
+            		    if ($all_query_ok===false) {
+        				    	self::$con->close();
+        					    self::returnMessage('Option Failed to commit the transaction', 'Warning');
+        					    exit();
+        				}else{
+        				    
+        				     
+        				    $this->setUserPicture($uid,$usrObj['photo']); 
+        				    
+        				    if($usrObj['isNew']==true){
+        				        self::returnMessage('User '.$uname.' is add', 'Success');
+        				    }else{
+        				        self::returnMessage('User '.$uname.' is update', 'Success'); 
+        				    }
+        				    
+        				}
+        		    }else{
+        		        self::$con->close();
+        		        self::returnMessage('Error : ( '.$eMessage.' )', 'Warning');
+    				    exit();
+        		    }
+				
+		     }catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+			}
+  
+		}
+		
+		function checkIsUser($ulogin,&$valid,$isNew,&$eMessage,&$uid){
+		    
+		     $isNew ?  $eMessaget=" Coudnt set this login <br>" :  $eMessaget=" Coud not find this login <br>"; 
+		    
+		    if ($result = self::$con->query("SELECT user_id FROM auth_users WHERE auth_users.login_user='$ulogin'")) {
+		        $row_cnt = $result->num_rows;
+		        self::isNotEmpty($row_cnt,$valid);
+		        $isNew ? $valid ? $valid=false  : $valid=true : NULL;
+		        $valid ? NULL : $eMessage=$eMessaget;
+		        if($isNew===false && $valid===true){
+		           $obj = $result->fetch_object();
+		           $uid = $obj->user_id;
+		        }elseif($isNew===true && $valid===true){
+		                self::$con->query("INSERT INTO auth_users( login_user, enabled, activated)VALUES ( 'reservid',0, 0);");
+		                $uid=self::$con->insert_id;
+		                self::$con->query("DELETE FROM auth_users WHERE login_user='reservid'");
+		        }
+		    } else {
+		        self::$con->close();
+		        self::returnMessage('Error : ( code checkIsUser crash !!!!  )', 'Warning');
+				exit();
+		    }
+		    
+		}
+		
+		function checkValidFields($usrObj,&$valid,$isNew,&$eM){
+		    $eL  ="Field login not set";
+		    $eOL ="Field oldlogin not set";
+		    $eP  ="Field Password not set";
+		    $eU  ="Field Username not set";
+		    $eE  ="Field email not set";
+		    $eUG ="Groups not set";
+            //                            INSER                                                     UPDATE  
+            if($valid===true){
+    		    $isNew ? self::isNotEmpty($usrObj['login'],$valid,$eM,$eL)                          : NULL; 
+    		    $valid ? $isNew ?                                                              NULL : self::isNotEmpty($usrObj['old'],$valid,$eM,$eOL)                : NULL;
+    		    $valid ? $isNew ?  self::isNotEmpty($usrObj['password'],$valid,$eM,$eP)             : NULL                                                            : NULL;
+    		    $valid ? $isNew ?  self::isNotEmpty($usrObj['username'],$valid,$eM,$eU)             : self::isNotEmpty($usrObj['username'],$valid,$eM,$eU)            : NULL;
+    		    $valid ? $isNew ?  self::isNotEmpty($usrObj['email'],$valid,$eM,$eE)                : self::isNotEmpty($usrObj['email'],$valid,$eM,$eE)               : NULL;
+    		    $valid ? $isNew ?  self::isNotEmpty(count($usrObj['usergroups']),$valid,$eM,$eUG)   : self::isNotEmpty(count($usrObj['usergroups']),$valid,$eM,$eUG)  : NULL;
+
+            }
+
+		}
+		
+		function doAction_getuser($adata){
+		$arrayRoot= array();
+        $a_id=$adata['idu'];
+       // self::returnMessage('Error : ( '.$a_id.' )', 'Warning');
+        
+        $query = "SELECT login_user AS login,
+                         passwd_user AS passwd,
+                         real_name AS uname,
+                         email AS email,
+                         enabled AS enabled,
+                         activated AS activated
+                  FROM auth_users WHERE auth_users.user_id = ?";
+        if ($stmt = self::$con->prepare($query)) {
+            $stmt->bind_param("s",$a_id);
+            $stmt->execute();
+            $stmt->bind_result($login,$passwd,$uname,$email,$enabled,$activated);
+            $stmt->fetch();
+            $arrayRoot=array('login' => $login ,
+                               'old' => $login ,
+                          'password' => $passwd,
+                          'username' => $uname,
+                             'email' => $email,
+                        'usergroups' => array(),
+                             'photo' => array(),
+                            'enable' => $enabled == 1 ? true : false,
+                            'active' => $activated == 1 ? true : false,
+                            'isNew'  => false);
+            $stmt->close();
+        }
+         self::getUserGroups($arrayRoot,$a_id);
+         self::getPhoto($arrayRoot,$a_id);
+        $result=json_encode($arrayRoot);
+		self::returnData($result);
+		}
+		function getPhoto(&$arrayRoot,$uid){
+		    
+		    $query = "SELECT photo, real_name, p, phototype, photosize  FROM auth_users where photo !='' and user_id = ? ;";
+		     if ($stmt = self::$con->prepare($query)) {
+		         $stmt->bind_param("s",$uid);
+		         $stmt->execute();
+		         $stmt->bind_result($photopath, $uname, $p, $phototype, $photosize);
+		         while($stmt->fetch()){
+		              $data = file_get_contents($photopath);
+		         
+		               $arrayItem=array(
+    		                          'filename' => $uname.".".$p,
+    		                          'filesize' => $photosize,
+    		                          'filetype' => $phototype,
+    		                          'isnew'    => false,
+    		                          'base64'   => base64_encode($data)
+    		                         );
+		               $stmt->close(); 
+		               $arrayRoot['photo'] = $arrayItem;
+		               break;
+		         }
+		         
+		        
+		     }
+		     
+		     
+		}
+		function getUserGroups(&$arrayRoot,$uid){
+		    $arrayRootGroups=array();
+    		 $query = "SELECT
+                          auth_roles.role_id,
+                          auth_roles.role_name
+                        FROM auth_roles
+                          RIGHT OUTER JOIN auth_user_role
+                            ON auth_roles.role_id = auth_user_role.role_id
+                        WHERE auth_user_role.user_id = ?";
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->bind_param("s",$uid);
+                $stmt->execute();
+                $stmt->bind_result($idg,$nameg);
+                   while ($stmt->fetch()) {
+                                 $arrayItem=array('value' => $idg , 'label' => $nameg);
+                                 array_push($arrayRootGroups, $arrayItem);
+                            }
+                
+                $stmt->close();
+                $arrayRoot['usergroups'] = $arrayRootGroups;
+            }
+		}
+		
+		function setUserGroups($uid,$arrayGroups,&$all_query_ok){
+		    
+		        foreach ($arrayGroups as $groupItem) {
+		            if ($all_query_ok===true) {
+		                 $roleID=$groupItem["value"];
+		                 self::$con->query("INSERT INTO auth_user_role (`user_id`, `role_id`)VALUES ( '$uid', '$roleID');") ? $all_query_ok=true : $all_query_ok=false;
+		            }else{break;}  
+		        }
+		    
+		}
+		
+		function setUserPicture($uid,$objPhoto){
+		    
+		  
+		    self::$con->autocommit(TRUE);
+		    $phoFolder=Registry::get(UserPhotos,null,true);
+		    if (!is_dir($phoFolder)) {
+                mkdir($phoFolder);         
+            }
+            if($objPhoto["isnew"]==true){
+                if ($result = self::$con->query("SELECT photo FROM auth_users WHERE auth_users.user_id='$uid'")) {
+                    $row_cnt = $result->num_rows;
+                    self::isNotEmpty($row_cnt,$hasPoto);
+                    if($hasPoto==true){
+                       $obj = $result->fetch_object();
+		               $oldPhoto = $obj->photo;
+		               unlink($oldPhoto);
+                    }
+                }
+                $genName = self::genGUI();
+                $p = substr(strrchr($objPhoto["filename"], '.'), 1); 
+                $filePath='./'.$phoFolder.$genName.'.'.$p;
+                $photosize=$objPhoto["filesize"];
+                $phototype=$objPhoto["filetype"];
+
+                $tn_image = new Thumbnail();
+                $tn_image->setSize(150,150);
+                $tn_image->setQuality(75);
+                $tn_image->setFileData(base64_decode($objPhoto["base64"]),$p);
+                $tn_image->save($filePath);
+               
+               
+                self::$con->query("UPDATE auth_users SET  `photo`='$filePath',`phototype`='$phototype', `photosize`='$photosize',`p`='$p' WHERE `user_id`='$uid';");
+                
+               // var_dump($objPhoto["base64"]);
+
+               
+            }
+		}
+		
+		function delUserGroups($uid,&$all_query_ok){
+		   if ($all_query_ok===true) {
+		       self::$con->query("DELETE FROM auth_user_role WHERE user_id='$uid'") ? $all_query_ok=true : $all_query_ok=false;
+		   } 
+		}
+		
+		function doAction_listallgroups($adata){
+		    	$arrayRoot= array();
+    			$query = "SELECT role_name, role_id FROM auth_roles WHERE auth_roles.role_show = 1 ";
+    
+    		if ($stmt = self::$con->prepare($query)) {
+    		    $stmt->execute();
+    		    $stmt->bind_result($role_name, $role_id);
+    		    while ($stmt->fetch()) {
+    		        $arrayItem = array(
+    		                           'label' => $role_name ,
+    				                   'value' => $role_id 
+                                      );
+    			    array_push($arrayRoot, $arrayItem);
+    		    }
+    		    $stmt->close();
+    		} 
+    		$result=json_encode($arrayRoot);
+    	    self::returnData($result);
+		}
+
+	}?>

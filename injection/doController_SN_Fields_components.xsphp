@@ -1,0 +1,329 @@
+<?php
+    include "injection/doController_SN_EditorCssJs.xsphp";
+	class DoController_SN_Fields_components  extends DoController
+	{
+	    
+	   function doAction_getlistcomponent ($adata){
+	       $arrayRoot= array();
+	       $query = "SELECT   site_components.title, 
+	                          site_components.`key`,   
+	                          site_components.tcode, 
+	                          site_components.jscode, 
+	                          site_components.phpcode,
+	                          site_components.active
+	                 FROM site_components";
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->execute();
+                $stmt->bind_result($title, $key, $tcode, $jscode, $phpcode, $active);
+                while ($stmt->fetch()) {
+                     $arrayItem=array('title'=>$title,
+                                      'ikey'=>$key,
+                                      'tcode_component'=>$tcode == null ? '' : $tcode,
+                                      'jscode_component'=>$jscode == null ? '' : $jscode,
+                                      'phpcode_component'=>$phpcode == null ? '' : $phpcode,
+                                      'active'=>$active == 1 ? true : false,
+                                      'widgets'=>array(),
+                                      'upload'=>false,
+                                      'isnew'=>false,
+                                      'delete'=>false,
+                                      '$selected'=>false);
+                     array_push($arrayRoot,$arrayItem);
+                }
+                $stmt->close();
+            }
+            
+            $this->getlistwidgets($arrayRoot);
+            $result=json_encode($arrayRoot);
+	    	self::returnData($result);
+	   }
+	   
+	   function getlistwidgets(&$data){
+	       foreach ($data as $k => $value) {
+	           $key=$value['ikey'];
+	              $arrayRoot= array();
+        	       $query = "SELECT
+                              site_components_widgets.name,
+                              site_components_widgets.widget_key,
+                              site_components_widgets.tcode,
+                              site_components_widgets.jscode,
+                              site_components_widgets.phpcode,
+                              site_components_widgets.active
+                            FROM site_components_widgets
+                            WHERE site_components_widgets.component_key = ?";
+                    if ($stmt = self::$con->prepare($query)) {
+                        $stmt->bind_param("s", $key);
+                        $stmt->execute();
+                        $stmt->bind_result($name, $key, $tcode, $jscode, $phpcode, $active);
+                        while ($stmt->fetch()) {
+                             $arrayItem=array('name'=>$name,
+                                              'widget_key'=>$key,
+                                              'tcode_widget'=>$tcode  == null ? '' : $tcode,
+                                              'jscode_widget'=>$jscode == null ? '' : $jscode,
+                                              'phpcode_widget'=>$phpcode == null ? '' : $phpcode,
+                                              'active'=>$active == 1 ? true : false,
+                                              'upload'=>false,
+                                              'isnew'=>false,
+                                              'delete'=>false,
+                                              '$selected'=>false);
+                             array_push($arrayRoot,$arrayItem);
+                        }
+                        $stmt->close();
+                    }
+                    
+                    $data[$k]['widgets']=$arrayRoot;
+	       }
+	   }
+	   
+	   function doAction_saveChanges ($adata){
+	        $all_query_ok=true;
+	        $componentObj=$adata['component'];
+	        
+	        $isNew       =$componentObj['isnew'];
+	        $title       =trim(mysql_escape_string (trim($componentObj['title'])));
+	        $ikey        =trim(mysql_escape_string (trim($componentObj['ikey'])));
+	        $jscode      =trim(mysql_escape_string (trim($componentObj['jscode_component'])));
+	        $phpcode     =trim(mysql_escape_string (trim($componentObj['phpcode_component'])));
+	        $tcode       =trim(mysql_escape_string (trim($componentObj['tcode_component'])));
+	        
+	        if($isNew===true){
+	            $q1="INSERT INTO `site_components` (
+                                                      `title`,
+                                                      `key`,
+                                                      `tcode`,
+                                                      `jscode`,
+                                                      `phpcode`
+                                                    ) VALUES (
+                                                              '$title',
+                                                              '$ikey',
+                                                              '$tcode',
+                                                              '$jscode',
+                                                              '$phpcode'
+                                                             )";
+            }
+            
+	        else{
+	            $q1="UPDATE `site_components` SET 
+                                                     `title`   ='$title',
+                                                     `tcode`   ='$tcode',
+                                                     `jscode`  ='$jscode',
+                                                     `phpcode` ='$phpcode'
+                                                                     
+                                        WHERE `key`='$ikey';";
+	        }
+	        
+	         try {
+	              self::$con->autocommit(FALSE);
+	              
+	               self::$con->query($q1) ? null : $all_query_ok=false;
+	           
+	               
+                    if( $all_query_ok===true){
+                        $widgets=$componentObj['widgets'];
+                         foreach ($widgets as $value) {
+                             $isNew_W       =$value['isnew'];
+                             
+                             $name_W        =trim(mysql_escape_string (trim($value['name'])));
+                             $ikey_W        =trim(mysql_escape_string (trim($value['widget_key'])));
+                             $jscode_W      =trim(mysql_escape_string (trim($value['jscode_widget'])));
+	                         $phpcode_W     =trim(mysql_escape_string (trim($value['phpcode_widget'])));
+	                         $tcode_W       =trim(mysql_escape_string (trim($value['tcode_widget'])));
+	                         
+	                           if($isNew_W===true){
+                    	            $q2="INSERT INTO `site_components_widgets` (
+                                                                          `name`,
+                                                                          `component_key`,
+                                                                          `widget_key`,
+                                                                          `tcode`,
+                                                                          `jscode`,
+                                                                          `phpcode`
+                                                                        ) VALUES (
+                                                                                  '$name_W',
+                                                                                  '$ikey',
+                                                                                  '$ikey_W',
+                                                                                  '$tcode_W',
+                                                                                  '$jscode_W',
+                                                                                  '$phpcode_W'
+                                                                                 )";
+                                }
+                                
+                    	        else{
+                    	            $q2="UPDATE `site_components_widgets` SET 
+                                                                         `name`    ='$name_W',
+                                                                         `tcode`   ='$tcode_W',
+                                                                         `jscode`  ='$jscode_W',
+                                                                         `phpcode` ='$phpcode_W'
+                                                                                         
+                                                            WHERE `widget_key`='$ikey_W';";
+                    	        }
+                    	       if( $all_query_ok===true){
+                    	        self::$con->query($q2) ? null : $all_query_ok=false; 
+                    	       }else{ break; }
+                         }
+                    }
+                    
+                    
+	             
+	             $all_query_ok ? self::$con->commit() : self::$con->rollback();
+				  
+				 if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction', 'Warning');
+					    exit();
+					}
+			   
+			    self::doAction_activeChanges($adata);
+			    self::returnMessage('Success! ', 'Success');
+			    
+	             
+	         }catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+			}
+	   }
+	   
+        function doAction_activeChanges ($adata){
+            $ikey=trim(mysql_escape_string (trim($adata['component']['ikey'])));
+            $title=trim(mysql_escape_string (trim($adata['component']['title'])));
+            
+	        $arrayRoot =array();
+	        $comp = new Compressor();
+	        $query = "SELECT
+                          site_components.jscode
+                        FROM site_components
+                        WHERE site_components.jscode IS NOT NULL
+                        AND site_components.active = 1
+                        AND site_components.jscode <> ''
+                        AND site_components.`key` = ?";
+            if ($stmt = self::$con->prepare($query)) {
+                $stmt->bind_param("s", $ikey);
+                $stmt->execute();
+                $stmt->bind_result($jscode);
+                while ($stmt->fetch()) {
+                    
+                     $item=base64_decode($jscode);
+                     array_push($arrayRoot,$item);
+            }
+              $stmt->close();
+            } 
+            
+              // var_dump($arrayRoot);
+         
+               $CSSJS=new DoController_SN_EditorCssJs();
+             
+               $oldFile=$comp->getOldFile('js',$ikey); 
+               $adata=array('obj'=>array("oldotype"=>'js',"oldpath"=>$oldFile));
+               $CSSJS->doAction_deletejscss($adata);
+                   
+               $comp->init('js',$ikey,$arrayRoot, true);    
+    	       $newFile=$comp->getOldFile('js',$ikey); 
+    	       $code   = base64_encode(file_get_contents($newFile, true));
+    	       $adata_js=array('obj'=>array("isnew"=>true,"title"=>"Component : ".$title,"path"=>$newFile,"otype"=>'js',"owhat"=>'admin',"code"=>$code));
+               $CSSJS->doAction_setjscss($adata_js);
+
+	    }
+	   
+	   
+	    function doAction_objDels  ($adata){
+	        $all_query_ok=true;
+	        $dwidgets   =$adata['objDel']['widgets'];
+	        $dcomponents=$adata['objDel']['components'];
+	        
+           try {
+                self::$con->autocommit(FALSE);
+	        
+                foreach ($dwidgets as $key => $value) {
+                    if($all_query_ok==true){
+                       $qd="DELETE FROM site_components_widgets  WHERE `widget_key`     ='$key' ";
+                       self::$con->query($qd) ? null : $all_query_ok=false;
+                    }else{break;}
+                    
+                }
+                
+                foreach ($dcomponents as $key => $value) {
+                    
+                     if($all_query_ok==true){
+                         $qd1="DELETE FROM site_components  WHERE `key`     ='$key' ";
+                         $qd2="DELETE FROM site_components_widgets  WHERE `component_key`     ='$key' ";
+                        
+                         self::$con->query($qd1) ? null : $all_query_ok=false;
+                         self::$con->query($qd2) ? null : $all_query_ok=false;
+                     }else{break;}
+                    
+                }
+                
+                if ($all_query_ok==false) {
+				    	self::$con->close();
+					    self::returnMessage('Failed to commit the transaction', 'Warning');
+					    exit();
+					}
+				    self::$con->close();
+				    self::returnMessage('Success Delete !', 'Success');
+            
+           }    catch (Exception $e) {
+				    self::$con->rollback();
+				    self::$con->close();
+				    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+				    exit();
+				}
+				
+	    }
+	   
+	   /*
+	   
+	   function addComponent($adata){
+	         $all_query_ok=true;
+	         $title=$adata['title'];
+	         $key  =$this->genGUI();
+	         $q="INSERT INTO site_components (`title`, `key`, `adm_code`) VALUES ('$title', '$key', '');";
+	          try{
+	              self::$con->autocommit(FALSE);
+	              self::$con->query($q) ? null : $all_query_ok=false;
+	              
+	              $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	               
+	               if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction (insert)==>> ', 'Warning');
+					    exit();
+					}
+    	              self::returnMessage('Success! component record  ', 'Success');
+	             
+	          }
+	          catch (Exception $e){
+                    self::$con->rollback();
+                    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+                    exit();
+               }
+	    }
+	    
+	   function addWidget ($adata){
+	         $all_query_ok=true;
+	         $name         =$adata['name'];
+	         $component_key=$adata['component_key'];
+	         $key  =$this->genGUI();
+	         $q="INSERT INTO site_components_widgets (`name`, `component_key`, `widget_key`, `template`) VALUES ('$name', '$component_key', '$key', '$key');";
+	          try{
+	              self::$con->autocommit(FALSE);
+	              self::$con->query($q) ? null : $all_query_ok=false;
+	              
+	              $all_query_ok ? self::$con->commit() : self::$con->rollback();
+	               
+	               if ($all_query_ok==false) {
+				    	    self::$con->close();
+					    self::returnMessage('Failed to commit the transaction (insert)==>> ', 'Warning');
+					    exit();
+					}
+    	              self::returnMessage('Success! widget record  ', 'Success');
+	             
+	          }
+	          catch (Exception $e){
+                    self::$con->rollback();
+                    self::returnMessage('Error : ( '.$e.' )', 'Warning');
+                    exit();
+               }
+	   }
+	    */
+
+	}?>
